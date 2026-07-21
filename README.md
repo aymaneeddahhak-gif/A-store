@@ -26,8 +26,6 @@ cp .env.example .env.local   # add Supabase keys + NEXT_PUBLIC_SITE_URL
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
 ### Environment variables
 
 | Variable | Description |
