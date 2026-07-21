@@ -1,59 +1,59 @@
-# FIKRA.LABS | Premium E-Commerce Template
+# JUST SHOP — Premium E-Commerce
 
-![FIKRA.LABS Preview](public/images/airpods.png) <!-- Update this with a real screenshot of the app -->
+A production-oriented Next.js e-commerce experience with Supabase auth, seller dashboard, and a refined glass UI.
 
-A highly polished, stealth-themed Next.js e-commerce template designed for premium brands. It features a sleek glassmorphism UI, interactive product cards with custom SVG "electric" borders, and a seamless shopping cart experience.
+## Features
 
-## ✨ Features
+- **Catalog** — Server-loaded products, search, filters, sort, hero marquee
+- **Commerce** — Cart (persisted), quick view, checkout, order history
+- **Auth** — Email/password, Google OAuth, demo seller access
+- **Seller** — Product CRUD and order management
+- **UX** — Mobile navigation, toasts, dark/light theme, reduced-motion support
+- **SEO** — Per-product metadata, sitemap, robots.txt
 
-* **Stealth & Premium UI:** Deep dark mode aesthetic with carefully crafted silver/metallic highlights and glassmorphism panels.
-* **Electric Border Cards:** Custom SVG turbulence filters to create dynamic, animated border effects on product cards.
-* **Hero Marquee:** Infinite scrolling, interactive product showcase hero section.
-* **Global Shopping Cart:** Slide-out, holographic-styled cart with persistent global state.
-* **Quick View Modals:** Instantly view product details without leaving the current page context.
-* **Category Filtering:** Seamless front-end product filtering with a dedicated sidebar.
-* **Next.js 15 & React 19:** Built on the bleeding edge of the React ecosystem.
+## Tech stack
 
-## 🚀 Tech Stack
+- **Next.js 15** (App Router) + **React 19**
+- **TypeScript** (strict build)
+- **Tailwind CSS 4**
+- **Supabase** (auth + database)
 
-* **Framework:** Next.js 15 (App Router)
-* **Library:** React 19
-* **Styling:** Tailwind CSS 4 (via `@tailwindcss/postcss`)
-* **3D/Graphics:** `@react-three/fiber` & `@react-three/drei`
-* **Icons:** `lucide-react`
-* **State Management:** React Context API (`ShopContext`)
-
-## 🛠️ Getting Started
-
-First, clone the repository and install dependencies:
+## Getting started
 
 ```bash
 npm install
-# or
-pnpm install
-```
-
-Run the development server:
-
-```bash
+cp .env.example .env.local   # add Supabase keys + NEXT_PUBLIC_SITE_URL
 npm run dev
-# or
-pnpm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-## 📂 Project Structure
+### Environment variables
 
-* `/app` - Next.js App Router pages and layouts
-* `/components` - Reusable UI components (Cards, Modals, Navbars)
-* `/contexts` - Global state context (e.g., `shop-context.tsx`)
-* `/public/images` - Static assets for products
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `NEXT_PUBLIC_SITE_URL` | Public site URL for SEO (e.g. `https://yourdomain.com`) |
 
-## 🎨 Customization
+## Scripts
 
-The core theme is controlled via CSS variables in `/app/globals.css`. You can easily adjust the `var(--background)`, `var(--foreground)`, and `var(--electric-light-color)` to match your brand identity.
+- `npm run dev` — development server
+- `npm run build` — production build (TypeScript + ESLint enforced)
+- `npm run start` — run production build
+- `npm run lint` — ESLint
 
-## 📄 License
+## Project structure
 
-This project is open-source and available under the [MIT License](LICENSE).
+```
+app/              Routes, layouts, global styles
+components/       UI (nav, cards, modals, catalog)
+contexts/         Shop state + toast notifications
+lib/              Supabase, types, server data fetching
+hooks/            Shared client hooks
+public/           Static assets
+```
+
+## License
+
+MIT

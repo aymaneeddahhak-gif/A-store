@@ -1,12 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { LayoutDashboard, Zap, Shirt, Coffee, Headphones, ChevronLeft, ChevronRight, Settings } from "lucide-react"
+import { LayoutDashboard, Zap, Shirt, Coffee, ChevronLeft, ChevronRight, User, Store, ShoppingBag } from "lucide-react"
 import { useShop } from "@/contexts/shop-context"
+import Link from "next/link"
+
+import { useRouter, usePathname } from "next/navigation"
 
 export function Sidebar() {
     const [collapsed, setCollapsed] = useState(true)
-    const { selectedCategory, setCategory } = useShop()
+    const { selectedCategory, setCategory, user } = useShop()
+    const router = useRouter()
+    const pathname = usePathname()
+
+    const handleCategoryClick = (id: string) => {
+        setCategory(id)
+        if (pathname !== "/") {
+            router.push("/")
+        }
+    }
 
     const categories = [
         { id: "All", icon: <LayoutDashboard size={24} />, label: "All Products" },
@@ -31,17 +43,44 @@ export function Sidebar() {
                         label={cat.label}
                         collapsed={collapsed}
                         active={selectedCategory === cat.id}
-                        onClick={() => setCategory(cat.id)}
+                        onClick={() => handleCategoryClick(cat.id)}
                     />
                 ))}
 
                 <div className="h-px w-full bg-[var(--border-color)] my-2 opacity-50" />
-                <SidebarItem icon={<Settings size={24} />} label="Settings" collapsed={collapsed} />
+                
+                <SidebarItem 
+                    icon={<Store size={24} />} 
+                    label="Seller" 
+                    collapsed={collapsed} 
+                    active={pathname === "/seller"}
+                    onClick={() => router.push("/seller")}
+                />
+
+                {user ? (
+                    <SidebarItem 
+                        icon={<ShoppingBag size={24} />} 
+                        label="My Orders" 
+                        collapsed={collapsed} 
+                        active={pathname === "/orders"}
+                        onClick={() => router.push("/orders")}
+                    />
+                ) : (
+                    <SidebarItem 
+                        icon={<User size={24} />} 
+                        label="Sign In" 
+                        collapsed={collapsed} 
+                        active={pathname === "/login"}
+                        onClick={() => router.push("/login")}
+                    />
+                )}
             </div>
 
             <div className="mt-auto mb-4">
                 <button
+                    type="button"
                     onClick={() => setCollapsed(!collapsed)}
+                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                     className="p-3 rounded-full text-[var(--text-main)] hover:bg-[var(--glass-bg)] border border-transparent hover:border-[var(--border-color)] transition-all"
                 >
                     {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
@@ -65,30 +104,28 @@ function SidebarItem({
     onClick?: () => void
 }) {
     return (
-        <div
+        <button
+            type="button"
             onClick={onClick}
             className={`
-        flex items-center gap-4 p-3 text-[var(--text-main)] rounded-xl cursor-pointer
-        transition-all duration-300 group relative overflow-hidden
+        flex items-center gap-4 p-3 text-[var(--text-main)] rounded-xl cursor-pointer w-full text-left
+        transition-all duration-200 group relative
         ${collapsed ? "justify-center" : "px-4"}
-        ${active ? "bg-[var(--glass-highlight)] shadow-[0_0_15px_rgba(128,128,128,0.15)] border border-[var(--glass-border)]" : "hover:bg-[var(--glass-bg)] hover:scale-105"}
+        ${active ? "bg-[var(--glass-highlight)] border border-[var(--glass-border)]" : "hover:bg-[var(--glass-bg)]"}
       `}
         >
-            <span className={`relative z-10 shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-[var(--electric-light-color)]" : ""}`}>
+            <span className={`relative z-10 shrink-0 transition-transform duration-200 ${active ? "text-[var(--electric-light-color)]" : ""}`}>
                 {icon}
             </span>
 
             <span className={`
         whitespace-nowrap font-medium relative z-10
-        transition-all duration-300 origin-left
+        transition-all duration-200 origin-left
         ${collapsed ? "w-0 opacity-0 scale-0" : "w-auto opacity-100 scale-100"}
         ${active ? "text-[var(--foreground)] font-bold" : ""}
       `}>
                 {label}
             </span>
-
-            {/* Glow effect on hover */}
-            <div className={`absolute inset-0 bg-gradient-to-r from-[var(--glass-highlight)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${active ? "opacity-20" : ""}`} />
-        </div>
+        </button>
     )
 }

@@ -2,6 +2,7 @@
 import { Eye } from "lucide-react"
 import Image from "next/image"
 import { useShop } from "@/contexts/shop-context"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 const MARQUEE_PRODUCTS = [
     {
@@ -13,12 +14,36 @@ const MARQUEE_PRODUCTS = [
         description: "Advanced active noise cancellation with 48h battery life.",
     },
     {
-        id: 2,
-        name: "Artisan Petit Pain",
-        price: 12,
-        category: "Food",
-        image: "/images/pteitpain.png",
-        description: "Flaky, buttery perfection baked fresh daily.",
+        id: 9,
+        name: "iPhone 17 Pro Max",
+        price: 1199,
+        category: "Electronics",
+        image: "/images/iphone-17-pro-max-naranja-cosmico-5.png",
+        description: "The pinnacle of mobile engineering with a cosmic orange finish.",
+    },
+    {
+        id: 10,
+        name: "Flexpedition Down Jacket",
+        price: 299,
+        category: "Fashion",
+        image: "/images/10748_2703_00.png",
+        description: "High-performance insulation for extreme urban exploration.",
+    },
+    {
+        id: 12,
+        name: "Dell XPS 15 Premium",
+        price: 1899,
+        category: "Electronics",
+        image: "/images/ASSET_MP_98772542.png",
+        description: "High-performance workstation with a sleek, minimalist carbon fiber chassis.",
+    },
+    {
+        id: 13,
+        name: "Stealth Urban Umbrella",
+        price: 55,
+        category: "Fashion",
+        image: "/images/images.png",
+        description: "Reinforced aerodynamic canopy for the sophisticated city dweller.",
     },
     {
         id: 3,
@@ -28,41 +53,39 @@ const MARQUEE_PRODUCTS = [
         image: "/images/RMADRIDKIT.png",
         description: "Official home kit, breathable tech fabric.",
     },
-    {
-        id: 4,
-        name: "Urban Kicks White",
-        price: 180,
-        category: "Fashion",
-        image: "/images/sneakers.png",
-        description: "Street-ready minimalist design with cloud foam sole.",
-    },
 ]
 
 export function HeroSection() {
-    const { openQuickView } = useShop()
+    const { openQuickView, products } = useShop()
+    const reducedMotion = useReducedMotion()
 
-    // Triple the array for seamless infinite scroll on wide screens
-    const tripled = [...MARQUEE_PRODUCTS, ...MARQUEE_PRODUCTS, ...MARQUEE_PRODUCTS]
+    // Double the array for seamless infinite loop (0% to -50% animation)
+    const doubled = reducedMotion ? MARQUEE_PRODUCTS : [...MARQUEE_PRODUCTS, ...MARQUEE_PRODUCTS]
 
-    const handleProductClick = (product: typeof MARQUEE_PRODUCTS[0]) => {
+    const handleProductClick = (item: typeof MARQUEE_PRODUCTS[0]) => {
+        const full = products.find((p) => p.id === item.id)
+        if (full) {
+            openQuickView(full)
+            return
+        }
         openQuickView({
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            category: product.category,
-            image: product.image,
+            ...item,
+            likes: 0,
+            rating: 5,
+            reviews: [],
+            description: item.description,
         })
     }
 
     return (
-        <div className="relative w-full h-[480px] md:h-[540px] mb-8 rounded-[32px] overflow-hidden border border-[var(--border-color)]">
+        <div className="relative w-full h-[520px] md:h-[600px] mb-12 rounded-[48px] overflow-hidden shadow-2xl">
             {/* Background */}
             <div className="absolute inset-0 bg-[var(--card)] z-0" />
 
             {/* Scrolling Product Cards */}
             <div className="absolute inset-0 z-10 flex items-center overflow-hidden">
-                <div className="hero-marquee-track flex items-center gap-8 will-change-transform px-4">
-                    {tripled.map((product, i) => (
+                <div className={`flex items-center gap-8 px-4 ${reducedMotion ? "flex-wrap justify-center" : "hero-marquee-track will-change-transform"}`}>
+                    {doubled.map((product, i) => (
                         <div
                             key={`${product.id}-${i}`}
                             className="hero-marquee-item flex-shrink-0 relative cursor-pointer group/card"
@@ -72,14 +95,16 @@ export function HeroSection() {
                                 {/* Glass shine */}
                                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent z-10 pointer-events-none" />
 
-                                {/* Product image */}
-                                <Image
-                                    src={product.image}
-                                    alt={product.name}
-                                    fill
-                                    className="object-cover transition-transform duration-500 group-hover/card:scale-110"
-                                    sizes="340px"
-                                />
+                                {/* Product image container with radial base for premium blending */}
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,white_0%,rgba(255,255,255,0.8)_60%,transparent_100%)] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,1)_0%,rgba(255,255,255,0.4)_70%,transparent_100%)]">
+                                    <Image
+                                        src={product.image}
+                                        alt={product.name}
+                                        fill
+                                        className="object-cover transition-transform duration-500 group-hover/card:scale-110 mix-blend-multiply"
+                                        sizes="340px"
+                                    />
+                                </div>
 
                                 {/* Hover overlay with product info */}
                                 <div className="absolute inset-0 z-20 flex flex-col justify-end opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
@@ -135,8 +160,8 @@ export function HeroSection() {
             <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-r from-[var(--background)] via-transparent to-[var(--background)] opacity-40" />
 
             {/* Ambient Light Blob */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--glass-highlight)] blur-[120px] rounded-full pointer-events-none opacity-25 z-0" />
-            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[var(--electric-light-color)] blur-[100px] rounded-full pointer-events-none opacity-10 z-0" />
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--glass-highlight)] blur-[32px] rounded-full pointer-events-none opacity-25 z-0" />
+            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[var(--electric-light-color)] blur-[32px] rounded-full pointer-events-none opacity-10 z-0" />
         </div>
     )
 }

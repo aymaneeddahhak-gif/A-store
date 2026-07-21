@@ -1,0 +1,10 @@
+.next
+node_modules
+out
+build
+pnpm-lock.yaml
+package-lock.json
+*.md
+next-env.d.ts
+tsconfig.tsbuildinfo
+public
