@@ -44,6 +44,8 @@ Thumbs.db
 .agents/
 .claude/
 .zcode/
+.opencode/
+.opencode.json
 skills-lock.json
 opencode.json
 
@@ -53,7 +55,7 @@ newchckoutpagedesing/
 newsellerdahbord/
 detailscard/
 
-# local Freebuff / preview state
+# local preview / capture state
 .freebuff/
 .dev-log.txt
 .seed-debug-log.txt

@@ -19,7 +19,7 @@ const eslintConfig = [
       "**/*.config.{mjs,js,ts}",
       "**/next-env.d.ts",
       "**/.next/types/**",
-      // Local agent/tooling directories — not part of the app source.
+      // Local tooling / scratch directories — not part of the app source.
       "**/.agents/**",
       "**/.claude/**",
       "**/.zcode/**",
