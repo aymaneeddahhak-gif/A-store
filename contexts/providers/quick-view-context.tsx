@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import type { Product } from "@/lib/types"
 
 /**
@@ -17,9 +18,13 @@ type QuickViewContextValue = {
 const QuickViewContext = createContext<QuickViewContextValue | undefined>(undefined)
 
 export function QuickViewProvider({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
 
-  const openQuickView = useCallback((product: Product) => setQuickViewProduct(product), [])
+  const openQuickView = useCallback((product: Product) => {
+    router.prefetch(`/product/${product.id}`)
+    setQuickViewProduct(product)
+  }, [router])
   const closeQuickView = useCallback(() => setQuickViewProduct(null), [])
 
   const value = useMemo(

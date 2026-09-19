@@ -4,7 +4,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { readThemeFromStorage, writeThemeToStorage } from "@/lib/storage"
 
 /**
- * Theme — light/dark, persisted to localStorage, applied via `.dark` on <html>.
+ * Theme — light/dark, persisted to localStorage and applied to <html> via the
+ * `.dark` class. The initial value is applied by the blocking script in
+ * app/layout.tsx, so the state here is seeded from the DOM to avoid a flash of
+ * the wrong palette.
  * Split from the old ShopContext so theme toggles don't re-render the catalog.
  */
 
@@ -17,24 +20,21 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(true)
+  const [hydrated, setHydrated] = useState(false)
 
-  // Hydrate from localStorage on mount.
+  // Adopt whatever the pre-paint script already applied.
   useEffect(() => {
-    const saved = readThemeFromStorage()
-    if (saved) setIsDarkMode(saved === "dark")
+    setIsDarkMode(readThemeFromStorage() !== "light")
+    setHydrated(true)
   }, [])
 
-  // Reflect theme on <html> + persist.
+  // Reflect theme on <html> + persist. Skipped until hydration so the initial
+  // default can't overwrite the stored preference.
   useEffect(() => {
-    const html = document.documentElement
-    if (isDarkMode) {
-      html.classList.add("dark")
-      writeThemeToStorage("dark")
-    } else {
-      html.classList.remove("dark")
-      writeThemeToStorage("light")
-    }
-  }, [isDarkMode])
+    if (!hydrated) return
+    document.documentElement.classList.toggle("dark", isDarkMode)
+    writeThemeToStorage(isDarkMode ? "dark" : "light")
+  }, [isDarkMode, hydrated])
 
   const toggleTheme = useCallback(() => setIsDarkMode((prev) => !prev), [])
 

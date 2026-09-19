@@ -11,12 +11,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProductById(Number(id))
 
   if (!product) {
-    return { title: "Product not found | JUST SHOP" }
+    return { title: { absolute: "A-store" } }
   }
 
   return {
-    title: `${product.name} | JUST SHOP`,
-    description: product.description ?? `Shop ${product.name} at JUST SHOP.`,
+    // Tab title stays "A-store" on every product page; the product itself is
+    // described in the description and link previews instead.
+    title: { absolute: "A-store" },
+    description: product.description ?? `Shop ${product.name} at A-store.`,
     openGraph: {
       title: product.name,
       description: product.description,

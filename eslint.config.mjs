@@ -19,6 +19,12 @@ const eslintConfig = [
       "**/*.config.{mjs,js,ts}",
       "**/next-env.d.ts",
       "**/.next/types/**",
+      // Local agent/tooling directories — not part of the app source.
+      "**/.agents/**",
+      "**/.claude/**",
+      "**/.zcode/**",
+      // Reference copy of the storefront design source.
+      "**/newdesing/**",
     ],
   },
   // Flat-config adapter for the legacy Next.js shareable configs.

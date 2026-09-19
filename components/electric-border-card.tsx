@@ -1,9 +1,15 @@
 "use client"
-import { useCallback } from "react"
+import { useCallback, useRef, useState } from "react"
 import { Heart, ShoppingBag } from "lucide-react"
-import { useShop, Product } from "@/contexts/shop-context"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import type { Product } from "@/lib/types"
+import { useCart } from "@/contexts/providers/cart-context"
+import { useLikes } from "@/contexts/providers/likes-context"
+import { useQuickView } from "@/contexts/providers/quick-view-context"
 import Image from "next/image"
+import { CardMedia } from "@/components/product/card-media"
+import { getProductVideo } from "@/lib/product-media"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 interface ElectricBorderCardProps {
   image?: string;
@@ -12,13 +18,49 @@ interface ElectricBorderCardProps {
 }
 
 export default function ElectricBorderCard({ image, className, product }: ElectricBorderCardProps) {
-  const router = useRouter()
-  const { toggleLike, likedProducts, addToCart } = useShop()
-  const isLiked = product ? likedProducts.includes(product.id) : false
+  const { addToCart } = useCart()
+  const { isLiked, toggleLike } = useLikes()
+  const { openQuickView } = useQuickView()
+  const liked = product ? isLiked(product.id) : false
+  const cardRef = useRef<HTMLDivElement>(null)
+  const reducedMotion = useReducedMotion()
+  // Drives the video crossfade. Mouse only — a touch tap should open the
+  // product, not start a clip the finger is covering.
+  const [hovered, setHovered] = useState(false)
+
+  // Cursor-following 3D tilt. Writes CSS vars only (compositor-only transform,
+  // no layout) — the .card-tilt class in globals.css consumes them.
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (reducedMotion || e.pointerType !== "mouse" || !cardRef.current) return
+      const rect = cardRef.current.getBoundingClientRect()
+      const px = (e.clientX - rect.left) / rect.width - 0.5
+      const py = (e.clientY - rect.top) / rect.height - 0.5
+      cardRef.current.style.setProperty("--tilt-x", `${(-py * 7).toFixed(2)}deg`)
+      cardRef.current.style.setProperty("--tilt-y", `${(px * 7).toFixed(2)}deg`)
+    },
+    [reducedMotion]
+  )
+
+  const resetTilt = useCallback(() => {
+    const el = cardRef.current
+    if (!el) return
+    el.style.setProperty("--tilt-x", "0deg")
+    el.style.setProperty("--tilt-y", "0deg")
+  }, [])
+
+  const handlePointerEnter = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse") setHovered(true)
+  }, [])
+
+  const handlePointerLeave = useCallback(() => {
+    setHovered(false)
+    resetTilt()
+  }, [resetTilt])
 
   const handleLike = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    if (product) toggleLike(product.id)
+    if (product) toggleLike(product)
   }, [product, toggleLike])
 
   const handleAddToCart = useCallback((e: React.MouseEvent) => {
@@ -27,15 +69,19 @@ export default function ElectricBorderCard({ image, className, product }: Electr
   }, [product, addToCart])
 
   const handleCardClick = useCallback(() => {
-    if (product) router.push(`/product/${product.id}`)
-  }, [product, router])
+    if (product) openQuickView(product)
+  }, [product, openQuickView])
 
   const displayImage = product?.image || image
 
   return (
     <div
-      className={`relative h-full min-h-[420px] rounded-[24px] overflow-hidden group/card cursor-pointer bg-[var(--card)] border border-[var(--border-color)] transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_20px_40px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_20px_40px_rgba(255,255,255,0.02)] flex flex-col p-[1px] ${className || ""}`}
+      ref={cardRef}
+      className={`card-tilt card-lift relative h-full rounded-[24px] overflow-hidden group/card cursor-pointer bg-[var(--card)] border border-[var(--border-color)] hover:shadow-[0_28px_60px_-12px_rgba(0,0,0,0.28)] dark:hover:shadow-[0_28px_60px_-12px_rgba(0,0,0,0.7)] flex flex-col p-[1px] ${className || ""}`}
       onClick={handleCardClick}
+      onPointerMove={handlePointerMove}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
     >
       {/* ── SPINNABLE ELECTRIC BORDER LASER ON HOVER ── */}
       <div className="absolute inset-[-200%] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_35%,var(--electric-light-color)_50%,transparent_65%,transparent_100%)] opacity-0 group-hover/card:opacity-100 group-hover/card:animate-[spin_4s_linear_infinite] transition-opacity duration-500 pointer-events-none z-0" />
@@ -44,7 +90,7 @@ export default function ElectricBorderCard({ image, className, product }: Electr
       <div className="relative z-10 w-full h-full min-h-0 rounded-[23px] overflow-hidden bg-[var(--card)] flex flex-col flex-1">
         
         {/* ── PRODUCT SHOWCASE IMAGE AREA ── */}
-        <div className="relative w-full flex-1 min-h-[280px] sm:min-h-[300px] overflow-hidden flex items-center justify-center p-4 sm:p-5 bg-[radial-gradient(ellipse_at_center,var(--glass-highlight)_0%,var(--glass-bg)_45%,transparent_100%)] select-none group-hover/card:bg-black/5 transition-colors duration-500">
+        <div className="relative w-full aspect-[4/3] overflow-hidden flex items-center justify-center select-none group-hover/card:bg-black/5 transition-colors duration-500">
           
           {/* Subtle Cyber Grid backdrop */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none opacity-40 dark:opacity-30" />
@@ -65,15 +111,25 @@ export default function ElectricBorderCard({ image, className, product }: Electr
           <div className="absolute bottom-4 w-16 h-0.5 bg-[var(--electric-light-color)] rounded-full blur-[1px] opacity-0 group-hover/card:opacity-60 group-hover/card:shadow-[0_0_10px_var(--electric-light-color)] transition-all duration-500 z-0" />
 
           {displayImage ? (
-            <div className="relative z-10 w-full max-w-[340px] aspect-square mx-auto transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-105 group-hover/card:-translate-y-2">
-              <Image
-                src={displayImage}
-                alt={product?.name || "Product"}
-                fill
-                className="object-contain object-center p-2 drop-shadow-[0_12px_28px_rgba(0,0,0,0.15)] dark:drop-shadow-[0_16px_36px_rgba(0,0,0,0.45)] transition-all duration-500"
-                sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, (max-width: 1280px) 32vw, 28vw"
-                loading="lazy"
-              />
+            <div className="absolute inset-0 z-10 transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-105">
+              {product ? (
+                <CardMedia
+                  image={product.image}
+                  video={getProductVideo(product)}
+                  alt={product.name}
+                  active={hovered}
+                  sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, (max-width: 1280px) 32vw, 28vw"
+                />
+              ) : (
+                <Image
+                  src={displayImage}
+                  alt="Product"
+                  fill
+                  className="object-contain object-center p-2 drop-shadow-[0_12px_28px_rgba(0,0,0,0.15)] dark:drop-shadow-[0_16px_36px_rgba(0,0,0,0.45)] transition-all duration-500"
+                  sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, (max-width: 1280px) 32vw, 28vw"
+                  loading="lazy"
+                />
+              )}
             </div>
           ) : (
             /* Fallback placeholder when no image is loaded */
@@ -96,25 +152,34 @@ export default function ElectricBorderCard({ image, className, product }: Electr
           <button
             type="button"
             onClick={handleLike}
-            aria-label={isLiked ? "Unlike product" : "Like product"}
+            aria-label={liked ? `Remove ${product?.name ?? "product"} from wishlist` : `Add ${product?.name ?? "product"} to wishlist`}
+            aria-pressed={liked}
             className={`
               absolute top-3 right-3 z-20 p-2 rounded-full border transition-all duration-300 backdrop-blur-md cursor-pointer
-              ${isLiked
-                ? "bg-rose-500/10 border-rose-500/30 text-rose-500 opacity-100 scale-100"
+              ${liked
+                ? "bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--accent)] opacity-100 scale-100"
                 : "bg-black/5 dark:bg-white/5 border-[var(--border-color)] text-[var(--foreground)] opacity-70 group-hover/card:opacity-100 hover:scale-110 active:scale-95"
               }
             `}
           >
-            <Heart size={13} fill={isLiked ? "currentColor" : "none"} />
+            <Heart size={13} fill={liked ? "currentColor" : "none"} aria-hidden />
           </button>
         </div>
 
         {/* ── GLASSMORPHIC DETAILS BOTTOM PANEL ── */}
         {product && (
-          <div className="relative z-20 shrink-0 p-4 sm:p-5 bg-[var(--glass-bg)] backdrop-blur-md border-t border-[var(--border-color)] flex flex-col gap-2 transition-all duration-300">
-            {/* Title */}
+          <div className="relative z-20 shrink-0 p-4 sm:p-5 bg-[var(--card)] border-t border-[var(--border-color)] flex flex-col gap-2 transition-all duration-300">
+            {/* The title is the keyboard/screen-reader path into the product.
+                Clicking the card body opens quick view as a pointer shortcut. */}
             <h3 className="text-base font-extrabold text-[var(--foreground)] tracking-wide line-clamp-2 group-hover/card:text-[var(--accent)] transition-colors duration-300">
-              {product.name}
+              <Link
+                href={`/product/${product.id}`}
+                prefetch
+                onClick={(e) => e.stopPropagation()}
+                className="rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] hover:underline underline-offset-2"
+              >
+                {product.name}
+              </Link>
             </h3>
 
             {/* Rating and Price */}
@@ -130,8 +195,9 @@ export default function ElectricBorderCard({ image, className, product }: Electr
               )}
             </div>
 
-            {/* ── ADD TO CART BUTTON (Slide up on hover) ── */}
-            <div className="h-0 opacity-0 group-hover/card:h-9 group-hover/card:opacity-100 group-hover/card:mt-2.5 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden">
+            {/* Reveals on hover, and on keyboard focus so it is reachable
+                without a pointer. */}
+            <div className="min-h-9 opacity-100">
               <button
                 type="button"
                 onClick={handleAddToCart}
@@ -147,4 +213,3 @@ export default function ElectricBorderCard({ image, className, product }: Electr
     </div>
   )
 }
-

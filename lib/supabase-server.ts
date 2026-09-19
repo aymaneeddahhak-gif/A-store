@@ -18,7 +18,8 @@ export async function createSupabaseServerClient() {
               cookieStore.set(name, value, options)
             })
           } catch {
-            // Called from a Server Component — middleware refreshes sessions
+            // Called from a Server Component — writes are not allowed there.
+            // Session refresh happens client-side via onAuthStateChange.
           }
         },
       },

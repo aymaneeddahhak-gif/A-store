@@ -26,7 +26,7 @@ export function SignupSuccess({
       <button
         type="button"
         onClick={onGoToSignIn}
-        className="mt-2 px-6 py-2.5 bg-white text-black rounded-xl text-sm font-semibold hover:bg-neutral-100 transition-all cursor-pointer"
+        className="mt-2 px-6 py-2.5 bg-[var(--hero-btn-bg)] text-[var(--hero-btn-text)] rounded-xl text-sm font-semibold hover:bg-[var(--hero-btn-hover)] transition-all cursor-pointer"
       >
         Go to Sign In
       </button>

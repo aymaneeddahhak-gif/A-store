@@ -2,54 +2,55 @@
 
 import { useEffect, useRef } from "react"
 import Link from "next/link"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
-interface VideoLogoProps {
-    size?: "sm" | "md" | "lg"
-    showText?: boolean
-    className?: string
-}
+/**
+ * Animated brand logo. The transparent WebM plays in Chromium and
+ * Firefox; browsers that can't decode it keep the static PNG poster instead,
+ * so the header never renders empty.
+ *
+ * The transparent WebM is the logo — the PNG is only a fallback poster.
+ * No plate in light mode (transparency shows through); dark mode keeps a
+ * dark plate so the surrounding chrome blends with the theme.
+ */
+export function VideoLogo({
+  className = "",
+  videoClassName = "h-16 sm:h-20 lg:h-24",
+}: {
+  className?: string
+  videoClassName?: string
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const reducedMotion = useReducedMotion()
 
-export function VideoLogo({ size = "md", showText = true, className = "" }: VideoLogoProps) {
-    const videoRef = useRef<HTMLVideoElement>(null)
-
-    // Ensure playback works robustly on all browsers
-    useEffect(() => {
-        if (videoRef.current) {
-            videoRef.current.play().catch(() => {
-                // Autoplay blocked/interrupted, ignore
-            })
-        }
-    }, [])
-
-    const dimensions = {
-        sm: "w-14 h-14",
-        md: "w-20 h-20",
-        lg: "w-32 h-32",
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (reducedMotion) {
+      video.pause()
+    } else {
+      void video.play().catch(() => {})
     }
+  }, [reducedMotion])
 
-    const currentSizeClass = dimensions[size]
-
-    return (
-        <Link 
-            href="/" 
-            className={`inline-flex items-center group select-none ${className}`}
-            title="Go to Home"
-        >
-            {/* Endlessly playing 3D Holographic Lion Logo */}
-            <div className={`relative ${currentSizeClass} shrink-0 transition-transform duration-500 group-hover:scale-110`}>
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="metadata"
-                    poster="/icon.svg"
-                    className="w-full h-full object-cover mix-blend-screen scale-[1.05]"
-                    src="/videos/welcome.mp4"
-                />
-            </div>
-        </Link>
-    )
+  return (
+    <Link
+      href="/"
+      className={`inline-flex items-center group select-none rounded-2xl px-1 py-0.5 ${className}`}
+      aria-label="A-store home"
+    >
+      <video
+        ref={videoRef}
+        src="/videos/mascot/LOogovideo.webm"
+        poster="/images/logo/logotrsnprt.png"
+        muted
+        loop
+        playsInline
+        autoPlay
+        preload="auto"
+        aria-hidden
+        className={`${videoClassName} w-auto aspect-video object-cover transition-transform duration-500 ease-out group-hover:scale-105`}
+      />
+    </Link>
+  )
 }
-

@@ -1,8 +1,11 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { MessageCircle, X, Send, Bot, User, Sparkles, ShoppingBag, Mic, Volume2, VolumeX } from "lucide-react"
-import { useShop, Product } from "@/contexts/shop-context"
-import Link from "next/link"
+import type { Product } from "@/lib/types"
+import { useCatalog } from "@/contexts/providers/catalog-context"
+import { useToast } from "@/contexts/toast-context"
+import { SHIPPING_FEE } from "@/lib/types"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 
 type Message = {
@@ -19,15 +22,46 @@ type Message = {
     }
 }
 
+/**
+ * Minimal structural types for the Web Speech API — the DOM lib doesn't ship
+ * them, and `any` here would hide real breakage in the recognition callbacks.
+ */
+type SpeechRecognitionResultLike = ArrayLike<{ transcript: string }>
+type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultLike> }
+type SpeechRecognitionLike = {
+    continuous: boolean
+    interimResults: boolean
+    start: () => void
+    stop: () => void
+    onstart: (() => void) | null
+    onend: (() => void) | null
+    onerror: ((event: { error: string }) => void) | null
+    onresult: ((event: SpeechRecognitionEventLike) => void) | null
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+    if (typeof window === "undefined") return null
+    const w = window as unknown as {
+        SpeechRecognition?: SpeechRecognitionCtor
+        webkitSpeechRecognition?: SpeechRecognitionCtor
+    }
+    return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+let messageCounter = 0
+const nextMessageId = () => `msg_${++messageCounter}`
+
 export default function Chatbot() {
-    const { products, setCategory } = useShop()
+    const { products, setCategory } = useCatalog()
+    const { showToast } = useToast()
     const router = useRouter()
     const [isOpen, setIsOpen] = useState(false)
     const [messages, setMessages] = useState<Message[]>([
         {
             id: "welcome",
             role: "bot",
-            content: "Hi — I'm your Shop Guide. Ask about products, categories, shipping, returns, or say \"login\" to sign in.",
+            content: "Hi — I'm your Shop Guide, a simple demo assistant. Ask about products, categories, shipping, returns, or say \"login\" to sign in.",
             timestamp: new Date()
         }
     ])
@@ -36,21 +70,35 @@ export default function Chatbot() {
     const [isListening, setIsListening] = useState(false)
     const [isVoiceMode, setIsVoiceMode] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
-    const recognitionRef = useRef<any>(null)
+    const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+    const replyTimerRef = useRef<number | null>(null)
+
+    // A pending reply must not land after the component goes away, any
+    // in-flight speech recognition should be released, and the bot must
+    // stop talking mid-sentence when the panel closes or unmounts.
+    useEffect(
+        () => () => {
+            if (replyTimerRef.current) window.clearTimeout(replyTimerRef.current)
+            recognitionRef.current?.stop?.()
+            window.speechSynthesis?.cancel?.()
+        },
+        []
+    )
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }
 
     useEffect(() => {
-        if (isOpen) {
-            setTimeout(scrollToBottom, 100);
-        }
+        if (!isOpen) return
+        const timer = window.setTimeout(scrollToBottom, 100)
+        return () => window.clearTimeout(timer)
     }, [messages, isTyping, isOpen])
 
     const startListening = () => {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            alert("Your browser does not support voice input. Try using Chrome or Edge.")
+        const SpeechRecognition = getSpeechRecognitionCtor()
+        if (!SpeechRecognition) {
+            showToast("Voice input is not supported in this browser. Try Chrome or Edge.", "info")
             return
         }
 
@@ -61,31 +109,25 @@ export default function Chatbot() {
             return
         }
 
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         const recognition = new SpeechRecognition()
         recognitionRef.current = recognition
-        
+
         recognition.continuous = false
         recognition.interimResults = true
 
         recognition.onstart = () => setIsListening(true)
-        
-        recognition.onresult = (event: any) => {
-            const transcript = Array.from(event.results)
-                .map((result: any) => result[0])
-                .map((result: any) => result.transcript)
-                .join('')
-            
+
+        recognition.onresult = (event) => {
+            const transcript = Array.from(event.results, (result) => result[0].transcript).join("")
             setInputValue(transcript)
         }
 
-        recognition.onerror = (event: any) => {
+        recognition.onerror = (event) => {
             // Ignore common non-critical errors
-            if (event.error === 'aborted' || event.error === 'no-speech') {
+            if (event.error === "aborted" || event.error === "no-speech") {
                 setIsListening(false)
                 return
             }
-            console.warn("Speech recognition error:", event.error)
             setIsListening(false)
         }
 
@@ -95,8 +137,8 @@ export default function Chatbot() {
 
         try {
             recognition.start()
-        } catch (e) {
-            console.warn("Recognition already started")
+        } catch {
+            // start() throws if recognition is already running — harmless.
         }
     }
 
@@ -144,9 +186,9 @@ export default function Chatbot() {
             response = "You can access your account and the seller dashboard by logging in."
             action = { type: "navigate", url: "/login", label: "Go to Login" }
         } else if (lowerText.includes("shipping") || lowerText.includes("delivery")) {
-            response = "We offer free worldwide shipping on all orders! Delivery usually takes 3-5 business days."
+            response = `We ship with a flat $${SHIPPING_FEE} fee per order, and delivery usually takes 3-5 business days.`
         } else if (lowerText.includes("return") || lowerText.includes("refund")) {
-            response = "We have a 30-day hassle-free return policy. If you're not completely satisfied, you can return your item for a full refund."
+            response = "We have a 30-day return policy. If you're not completely satisfied, you can return your item for a full refund."
         } else if (lowerText.includes("product") || lowerText.includes("item") || lowerText.includes("buy")) {
             response = "We have a wide range of premium items. Try checking out our latest arrivals on the home page!"
             action = { type: "navigate", url: "/", label: "Browse Store", category: "All" }
@@ -162,7 +204,7 @@ export default function Chatbot() {
         if (!inputValue.trim()) return
 
         const newUserMessage: Message = {
-            id: Date.now().toString(),
+            id: nextMessageId(),
             role: "user",
             content: inputValue,
             timestamp: new Date()
@@ -172,7 +214,7 @@ export default function Chatbot() {
         setInputValue("")
         setIsTyping(true)
 
-        setTimeout(() => {
+        replyTimerRef.current = window.setTimeout(() => {
             const { response, recommendedProduct, action } = generateResponse(newUserMessage.content)
             
             if (isVoiceMode && 'speechSynthesis' in window) {
@@ -181,7 +223,7 @@ export default function Chatbot() {
             }
             
             const newBotMessage: Message = {
-                id: (Date.now() + 1).toString(),
+                id: nextMessageId(),
                 role: "bot",
                 content: response,
                 timestamp: new Date(),
@@ -218,22 +260,24 @@ export default function Chatbot() {
                             </div>
                             <div>
                                 <h3 className="font-black text-[var(--foreground)] leading-none">Shop Guide</h3>
-                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1 mt-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    Online
+                                <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-widest flex items-center gap-1 mt-1">
+                                    Demo assistant
                                 </span>
                             </div>
                         </div>
                         <div className="flex items-center gap-1">
-                            <button 
+                            <button
                                 onClick={() => setIsVoiceMode(!isVoiceMode)}
                                 className={`p-2 rounded-full transition-all ${isVoiceMode ? 'text-amber-500 bg-amber-500/10' : 'text-[var(--foreground)] opacity-40 hover:opacity-100 hover:bg-[var(--glass-bg)]'}`}
                                 title={isVoiceMode ? "Mute Bot" : "Unmute Bot"}
+                                aria-label={isVoiceMode ? "Mute bot voice replies" : "Unmute bot voice replies"}
+                                aria-pressed={isVoiceMode}
                             >
                                 {isVoiceMode ? <Volume2 size={20} /> : <VolumeX size={20} />}
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setIsOpen(false)}
+                                aria-label="Close shop guide"
                                 className="p-2 text-[var(--foreground)] opacity-40 hover:opacity-100 hover:bg-[var(--glass-bg)] rounded-full transition-all"
                             >
                                 <X size={20} />
@@ -241,7 +285,7 @@ export default function Chatbot() {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-hide">
+                    <div className="flex-1 overflow-y-auto p-5 space-y-6" aria-live="polite" aria-label="Chat messages">
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
                                 <div className={`flex items-end gap-2 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
@@ -259,8 +303,8 @@ export default function Chatbot() {
                                 {msg.productRecommendation && (
                                     <div className="mt-3 ml-10 max-w-[85%] p-3 bg-[var(--card)] border border-[var(--border-color)] rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-500">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-16 h-16 bg-[var(--background)] rounded-xl border border-[var(--border-color)] overflow-hidden flex-shrink-0">
-                                                <img src={msg.productRecommendation.image} alt={msg.productRecommendation.name} className="w-full h-full object-contain p-2" />
+                                            <div className="w-16 h-16 bg-[var(--background)] rounded-xl border border-[var(--border-color)] relative overflow-hidden flex-shrink-0">
+                                                <Image src={msg.productRecommendation.image} alt={msg.productRecommendation.name} fill sizes="64px" className="object-contain p-2" />
                                             </div>
                                             <div>
                                                 <div className="text-xs font-bold uppercase tracking-widest text-[var(--foreground)] opacity-50 mb-1">Recommended</div>
@@ -315,17 +359,19 @@ export default function Chatbot() {
                                     placeholder={isListening ? "Listening..." : "Ask me anything..."} 
                                     className={`w-full bg-[var(--background)] border border-[var(--border-color)] rounded-2xl pl-5 pr-12 py-4 text-sm text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--foreground)] placeholder:opacity-30 ${isListening ? 'ring-1 ring-rose-500' : ''}`}
                                 />
-                                <button 
+                                <button
                                     type="button"
                                     onClick={startListening}
+                                    aria-label={isListening ? "Stop voice input" : "Start voice input"}
                                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all ${isListening ? 'text-rose-500 bg-rose-500/10 animate-pulse' : 'text-[var(--foreground)] opacity-50 hover:opacity-100'}`}
                                 >
                                     <Mic size={16} />
                                 </button>
                             </div>
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 disabled={!inputValue.trim() || isTyping}
+                                aria-label="Send message"
                                 className="w-12 h-12 flex-shrink-0 bg-[var(--foreground)] text-[var(--background)] rounded-2xl flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Send size={16} />
@@ -343,7 +389,6 @@ export default function Chatbot() {
                     className="w-16 h-16 bg-[var(--foreground)] text-[var(--background)] rounded-full shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all animate-in zoom-in duration-300 relative"
                 >
                     <MessageCircle size={28} />
-                    <span className="absolute top-0 right-0 w-4 h-4 bg-rose-500 rounded-full border-2 border-[var(--background)] animate-pulse"></span>
                 </button>
             )}
         </div>

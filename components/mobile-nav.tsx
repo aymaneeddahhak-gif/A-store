@@ -5,7 +5,9 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
-  Zap,
+  Smartphone,
+  Footprints,
+  Gamepad2,
   Shirt,
   Coffee,
   Store,
@@ -13,23 +15,28 @@ import {
   User,
   X,
   LogOut,
+  Tag,
 } from "lucide-react"
-import { useShop } from "@/contexts/shop-context"
+import { useAuth } from "@/contexts/providers/auth-context"
+import { useCatalog } from "@/contexts/providers/catalog-context"
 
 type MobileNavProps = {
   open: boolean
   onClose: () => void
 }
 
-const CATEGORIES = [
-  { id: "All", icon: LayoutDashboard, label: "All Products" },
-  { id: "Electronics", icon: Zap, label: "Electronics" },
-  { id: "Fashion", icon: Shirt, label: "Fashion" },
-  { id: "Food", icon: Coffee, label: "Food" },
-] as const
+const CATEGORY_ICONS = {
+  all: LayoutDashboard,
+  phones: Smartphone,
+  sneakers: Footprints,
+  gaming: Gamepad2,
+  clothes: Shirt,
+  food: Coffee,
+} as const
 
 export function MobileNav({ open, onClose }: MobileNavProps) {
-  const { selectedCategory, setCategory, user, signOut } = useShop()
+  const { selectedCategory, setCategory, categories } = useCatalog()
+  const { user, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -94,21 +101,24 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
           <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)]">
             Categories
           </p>
-          {CATEGORIES.map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => pickCategory(id)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors
-                ${selectedCategory === id
-                  ? "bg-[var(--glass-highlight)] text-[var(--foreground)]"
-                  : "text-[var(--muted-foreground)] hover:bg-[var(--glass-bg)] hover:text-[var(--foreground)]"
-                }`}
-            >
-              <Icon size={20} />
-              {label}
-            </button>
-          ))}
+          {categories.map(({ id, label }) => {
+            const Icon = CATEGORY_ICONS[id as keyof typeof CATEGORY_ICONS] ?? Tag
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => pickCategory(id)}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors
+                  ${selectedCategory === id
+                    ? "bg-[var(--glass-highlight)] text-[var(--foreground)]"
+                    : "text-[var(--muted-foreground)] hover:bg-[var(--glass-bg)] hover:text-[var(--foreground)]"
+                  }`}
+              >
+                <Icon size={20} />
+                {id === "all" ? "All Products" : label}
+              </button>
+            )
+          })}
 
           <div className="my-3 h-px bg-[var(--border-color)]" />
 

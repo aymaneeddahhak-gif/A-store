@@ -1,16 +1,12 @@
 "use client"
 
-import { useShop } from "@/contexts/shop-context"
-import { X, Package, Tag, Truck, Star, Bell, Check, Trash2 } from "lucide-react"
+import { useNotifications } from "@/contexts/providers/notifications-context"
+import { X, Check, Trash2, Bell } from "lucide-react"
 import { useEffect, useRef } from "react"
-
-const iconMap: Record<string, React.ReactNode> = {
-    order: <Package size={18} className="text-blue-400" />,
-    promo: <Tag size={18} className="text-emerald-400" />,
-    shipping: <Truck size={18} className="text-amber-400" />,
-    review: <Star size={18} className="text-yellow-400" />,
-    system: <Bell size={18} className="text-purple-400" />,
-}
+import {
+  NotificationCard,
+  STYLE_FOR_TYPE,
+} from "@/components/notifications/notification-card"
 
 export function NotificationPanel() {
     const {
@@ -22,7 +18,7 @@ export function NotificationPanel() {
         removeNotification,
         clearAllNotifications,
         unreadCount,
-    } = useShop()
+    } = useNotifications()
 
     const panelRef = useRef<HTMLDivElement>(null)
 
@@ -54,7 +50,7 @@ export function NotificationPanel() {
         <div
             ref={panelRef}
             className={`
-                fixed top-[64px] right-[80px] w-[380px] max-h-[520px] z-[70]
+                fixed top-[64px] right-4 left-4 sm:left-auto sm:w-[380px] max-h-[520px] z-[70]
                 bg-[var(--drawer-bg)] border border-[var(--border-color)]
                 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.3)]
                 backdrop-blur-md overflow-hidden
@@ -85,6 +81,7 @@ export function NotificationPanel() {
                             onClick={markAllAsRead}
                             className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-emerald-400 transition-all"
                             title="Mark all as read"
+                            aria-label="Mark all notifications as read"
                         >
                             <Check size={16} />
                         </button>
@@ -94,6 +91,7 @@ export function NotificationPanel() {
                             onClick={clearAllNotifications}
                             className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-rose-400 transition-all"
                             title="Clear all"
+                            aria-label="Clear all notifications"
                         >
                             <Trash2 size={16} />
                         </button>
@@ -101,6 +99,7 @@ export function NotificationPanel() {
                     <button
                         onClick={toggleNotifications}
                         className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all"
+                        aria-label="Close notifications"
                     >
                         <X size={16} />
                     </button>
@@ -108,7 +107,7 @@ export function NotificationPanel() {
             </div>
 
             {/* Notification List */}
-            <div className="overflow-y-auto max-h-[400px] scrollbar-thin">
+            <div className="overflow-y-auto max-h-[400px]">
                 {notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                         <div className="w-14 h-14 rounded-full bg-[var(--glass-bg)] border border-[var(--border-color)] flex items-center justify-center mb-4">
@@ -120,12 +119,23 @@ export function NotificationPanel() {
                         </p>
                     </div>
                 ) : (
-                    notifications.map((notif, i) => (
+                    notifications.map((notif, i) => {
+                        const style = STYLE_FOR_TYPE[notif.type] ?? STYLE_FOR_TYPE.system
+                        return (
                         <div
                             key={notif.id}
                             onClick={() => !notif.read && markAsRead(notif.id)}
+                            onKeyDown={(e) => {
+                                if (!notif.read && (e.key === "Enter" || e.key === " ")) {
+                                    e.preventDefault()
+                                    markAsRead(notif.id)
+                                }
+                            }}
+                            role={notif.read ? undefined : "button"}
+                            tabIndex={notif.read ? undefined : 0}
+                            aria-label={notif.read ? undefined : `Mark "${notif.title}" as read`}
                             className={`
-                                group relative px-5 py-4 flex items-start gap-3 cursor-pointer
+                                relative px-3 py-2.5 cursor-pointer
                                 transition-all duration-200 hover:bg-[var(--glass-bg)]
                                 ${!notif.read ? "bg-[var(--glass-bg)]/50" : ""}
                                 ${i < notifications.length - 1 ? "border-b border-[var(--border-color)]/50" : ""}
@@ -133,39 +143,20 @@ export function NotificationPanel() {
                         >
                             {/* Unread indicator */}
                             {!notif.read && (
-                                <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
+                                <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
                             )}
 
-                            {/* Icon */}
-                            <div className="w-9 h-9 rounded-xl bg-[var(--glass-bg)] border border-[var(--border-color)] flex items-center justify-center shrink-0 mt-0.5">
-                                {iconMap[notif.type] || iconMap.system}
-                            </div>
-
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                                <p className={`text-sm leading-snug ${!notif.read ? "text-[var(--foreground)] font-semibold" : "text-[var(--foreground)] opacity-80"}`}>
-                                    {notif.title}
-                                </p>
-                                <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">
-                                    {notif.message}
-                                </p>
-                                <span className="text-[10px] text-[var(--muted-foreground)] opacity-60 mt-1 block">
-                                    {notif.time}
-                                </span>
-                            </div>
-
-                            {/* Delete */}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    removeNotification(notif.id)
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-rose-400 transition-all shrink-0"
-                            >
-                                <X size={14} />
-                            </button>
+                            <NotificationCard
+                                title={notif.title}
+                                message={notif.message}
+                                footnote={notif.time}
+                                icon={style.icon}
+                                accent={style.accent}
+                                onClose={() => removeNotification(notif.id)}
+                            />
                         </div>
-                    ))
+                        )
+                    })
                 )}
             </div>
 

@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/providers/auth-context"
+import { DEMO_ACCOUNTS, type DemoAccountId } from "@/lib/demo-accounts"
+import { demoAdminLoginAction } from "@/lib/actions/demo-login"
 import type { AuthFeedback, AuthMode } from "@/components/login/types"
 
 export function useAuthFlow() {
   const router = useRouter()
-  const { user, authLoading, signInDemo } = useAuth()
+  const { user, authLoading } = useAuth()
 
   const [mode, setMode] = useState<AuthMode>("login")
   const [showPassword, setShowPassword] = useState(false)
@@ -31,32 +33,42 @@ export function useAuthFlow() {
     setPassword("")
   }, [])
 
+  const signInWithPassword = useCallback(
+    async (signInEmail: string, signInPassword: string) => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: signInEmail,
+        password: signInPassword,
+      })
+
+      if (!error) {
+        router.push("/")
+        return
+      }
+
+      if (error.message.includes("Invalid login credentials")) {
+        setFeedback({
+          type: "error",
+          message: "Incorrect email or password.",
+          action: {
+            label: "Don't have an account? Sign up",
+            onClick: () => switchMode("signup"),
+          },
+        })
+      } else if (error.message.includes("Email not confirmed")) {
+        setFeedback({
+          type: "info",
+          message: "Please verify your email first. Check your inbox for a confirmation link.",
+        })
+      } else {
+        setFeedback({ type: "error", message: error.message })
+      }
+    },
+    [router, switchMode]
+  )
+
   const handleSignIn = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (!error) {
-      router.push("/")
-      return
-    }
-
-    if (error.message.includes("Invalid login credentials")) {
-      setFeedback({
-        type: "error",
-        message: "Incorrect email or password.",
-        action: {
-          label: "Don't have an account? Sign up",
-          onClick: () => switchMode("signup"),
-        },
-      })
-    } else if (error.message.includes("Email not confirmed")) {
-      setFeedback({
-        type: "info",
-        message: "Please verify your email first. Check your inbox for a confirmation link.",
-      })
-    } else {
-      setFeedback({ type: "error", message: error.message })
-    }
-  }, [email, password, router, switchMode])
+    await signInWithPassword(email, password)
+  }, [email, password, signInWithPassword])
 
   const handleSignUp = useCallback(async () => {
     if (password.length < 6) {
@@ -133,10 +145,40 @@ export function useAuthFlow() {
     }
   }, [])
 
-  const handleDemoLogin = useCallback(() => {
-    signInDemo()
-    router.push("/")
-  }, [signInDemo, router])
+  // Portfolio demo has no email server — password reset is explained
+  // instead of a dead link.
+  const handleForgotPassword = useCallback(() => {
+    setFeedback({
+      type: "info",
+      message: "Password reset is disabled in this portfolio demo — sign in with a demo account below.",
+    })
+  }, [])
+
+  // Portfolio one-click login — signs into a real demo account. The admin
+  // signs in through a server action so its password never reaches the client.
+  const handleDemoLogin = useCallback(
+    async (accountId: DemoAccountId) => {
+      const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)
+      if (!account) return
+      setFeedback(null)
+      setIsLoading(true)
+      try {
+        if (accountId === "admin") {
+          const res = await demoAdminLoginAction()
+          if (res.ok) {
+            router.push("/")
+          } else {
+            setFeedback({ type: "error", message: res.error ?? "Admin sign-in failed." })
+          }
+          return
+        }
+        await signInWithPassword(account.email, account.password)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [signInWithPassword, router]
+  )
 
   return {
     mode,
@@ -157,6 +199,7 @@ export function useAuthFlow() {
     switchMode,
     handleSubmit,
     handleGoogleLogin,
+    handleForgotPassword,
     handleDemoLogin,
   }
 }

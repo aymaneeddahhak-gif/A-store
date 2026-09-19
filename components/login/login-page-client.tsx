@@ -1,51 +1,46 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Loader2 } from "lucide-react"
-import { VideoLogo } from "@/components/video-logo"
+import Image from "next/image"
+import { ArrowRight } from "lucide-react"
 import { LoginShowcase } from "@/components/login/login-showcase"
 import { SignupSuccess } from "@/components/login/signup-success"
 import { AuthForm } from "@/components/login/auth-form"
+import { AuthSkeleton } from "@/components/loading-skeletons"
 import { useAuthFlow } from "@/hooks/use-auth-flow"
 
 export function LoginPageClient() {
   const flow = useAuthFlow()
 
   if (flow.authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-body)]">
-        <Loader2 className="w-8 h-8 animate-spin text-[var(--muted-foreground)]" />
-      </div>
-    )
+    return <AuthSkeleton />
   }
 
-  if (flow.user) return null
+  if (flow.user) {
+    // Signed in — the flow is already navigating; hold the skeleton instead
+    // of a blank frame while router.push completes.
+    return <AuthSkeleton />
+  }
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 bg-[#050505] text-[var(--foreground)] overflow-hidden relative">
+    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 bg-[var(--background)] text-[var(--foreground)] overflow-hidden relative">
       <LoginShowcase />
 
-      <div className="col-span-12 lg:col-span-5 xl:col-span-4 flex items-center justify-center p-4 sm:p-10 relative z-10 w-full min-h-screen lg:border-l lg:border-white/5 bg-[#050505]">
-        <div className="lg:hidden absolute inset-0 w-full h-full overflow-hidden bg-black pointer-events-none">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover brightness-[0.22] contrast-[1.05]"
-            src="/videos/waiting.mp4"
+      <div className="col-span-12 lg:col-span-5 flex flex-col items-center justify-center gap-8 px-5 py-12 sm:px-10 relative z-10 w-full min-h-screen lg:border-l lg:border-[var(--border-color)] bg-[var(--background)]">
+        <div className="lg:hidden w-full max-w-[420px] relative h-56 sm:h-72 rounded-[28px] overflow-hidden border border-[var(--border-color)] bg-[var(--card)] shrink-0 flex items-center justify-center">
+          <Image
+            src="/images/logo/logotrsnprt.png"
+            alt="A-store logo"
+            width={896}
+            height={1200}
+            priority
+            className="h-40 sm:h-52 w-auto object-contain dark:invert"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/40 via-transparent to-[#050505] pointer-events-none" />
         </div>
 
-        <div className="w-full max-w-[400px] relative z-10">
-          <div className="flex flex-col items-center mb-8">
-            <VideoLogo size="lg" />
-          </div>
-
+        <div className="w-full max-w-[450px] relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div
-            className="floating-nav !rounded-3xl p-8 flex flex-col gap-6 border border-white/5 bg-black/60 backdrop-blur-xl"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}
+            className="rounded-[20px] p-[30px] flex flex-col gap-6 border border-[var(--border-color)] bg-[var(--card)] shadow-2xl"
           >
             {flow.signupSuccess ? (
               <SignupSuccess
@@ -68,6 +63,7 @@ export function LoginPageClient() {
                 onTogglePassword={() => flow.setShowPassword((v) => !v)}
                 onSubmit={flow.handleSubmit}
                 onGoogleLogin={flow.handleGoogleLogin}
+                onForgotPassword={flow.handleForgotPassword}
                 onDemoLogin={flow.handleDemoLogin}
                 onSwitchMode={flow.switchMode}
               />
@@ -77,9 +73,9 @@ export function LoginPageClient() {
           <div className="text-center mt-8">
             <Link
               href="/"
-              className="text-[10px] uppercase tracking-wider font-bold text-neutral-400 hover:text-white transition-colors inline-flex items-center gap-1.5"
+              className="text-[10px] uppercase tracking-wider font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1.5"
             >
-              <ArrowRight size={12} className="rotate-180" />
+              <ArrowRight size={12} className="rotate-180" aria-hidden />
               Back to Store
             </Link>
           </div>

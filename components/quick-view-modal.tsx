@@ -2,30 +2,58 @@
 
 import { useEffect, useRef } from "react"
 import Image from "next/image"
-import { useShop } from "@/contexts/shop-context"
-import { X, ShoppingBag, Heart } from "lucide-react"
+import Link from "next/link"
+import { useQuickView } from "@/contexts/providers/quick-view-context"
+import { useCart } from "@/contexts/providers/cart-context"
+import { useLikes } from "@/contexts/providers/likes-context"
+import { X, ShoppingBag, Heart, ArrowRight } from "lucide-react"
 
 export function QuickViewModal() {
-  const { quickViewProduct, closeQuickView, addToCart, toggleLike, likedProducts } = useShop()
+  const { quickViewProduct, closeQuickView } = useQuickView()
+  const { addToCart } = useCart()
+  const { isLiked: isProductLiked, toggleLike } = useLikes()
   const closeRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!quickViewProduct) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeQuickView()
+      if (e.key === "Escape") {
+        closeQuickView()
+        return
+      }
+      if (e.key !== "Tab") return
+      // Keep focus inside the dialog while it is open.
+      const focusables = panelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables || focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     document.addEventListener("keydown", onKey)
     closeRef.current?.focus()
     document.body.style.overflow = "hidden"
     return () => {
       document.removeEventListener("keydown", onKey)
       document.body.style.overflow = ""
+      previouslyFocused?.focus?.()
     }
   }, [quickViewProduct, closeQuickView])
 
   if (!quickViewProduct) return null
 
-  const isLiked = likedProducts.includes(quickViewProduct.id)
+  const liked = isProductLiked(quickViewProduct.id)
   const description =
     quickViewProduct.description ||
     "Premium quality with fast shipping and hassle-free returns."
@@ -39,6 +67,7 @@ export function QuickViewModal() {
       aria-labelledby="quick-view-title"
     >
       <div
+        ref={panelRef}
         className="w-full sm:w-[90%] max-w-4xl max-h-[92vh] sm:max-h-[85vh] bg-[var(--modal-bg)] border border-[var(--border-color)] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col sm:flex-row shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
@@ -76,7 +105,7 @@ export function QuickViewModal() {
 
           <p className="text-[var(--muted-foreground)] leading-relaxed text-sm sm:text-base">{description}</p>
 
-          <div className="flex gap-3 mt-2">
+          <div className="flex flex-col sm:flex-row gap-3 mt-2">
             <button
               type="button"
               onClick={() => {
@@ -88,17 +117,27 @@ export function QuickViewModal() {
               <ShoppingBag size={18} />
               Add to cart
             </button>
+            <Link
+              href={`/product/${quickViewProduct.id}`}
+              prefetch
+              onClick={closeQuickView}
+              className="px-5 py-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--glass-highlight)] transition-all font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+            >
+              View More
+              <ArrowRight size={14} />
+            </Link>
             <button
               type="button"
-              onClick={() => toggleLike(quickViewProduct.id)}
+              onClick={() => toggleLike(quickViewProduct)}
               className={`px-4 py-3.5 rounded-xl border transition-all ${
-                isLiked
-                  ? "border-rose-500/40 text-rose-500 bg-rose-500/10"
+                liked
+                  ? "border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-muted)]"
                   : "border-[var(--border-color)] text-[var(--foreground)] hover:border-[var(--accent)]"
               }`}
-              aria-label={isLiked ? "Unlike product" : "Like product"}
+              aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
+              aria-pressed={liked}
             >
-              <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
+              <Heart size={20} fill={liked ? "currentColor" : "none"} />
             </button>
           </div>
         </div>
