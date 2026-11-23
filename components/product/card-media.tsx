@@ -25,6 +25,7 @@ export function CardMedia({
   alt,
   active,
   sizes,
+  priority = false,
   videoOnly = false,
   eagerVideo = false,
   fallbackToImage = false,
@@ -34,6 +35,7 @@ export function CardMedia({
   alt: string
   active: boolean
   sizes: string
+  priority?: boolean
   videoOnly?: boolean
   eagerVideo?: boolean
   fallbackToImage?: boolean
@@ -71,6 +73,18 @@ export function CardMedia({
   // and for videoOnly cards until the first frame is ready to paint.
   const showImage = !videoOnly || (fallbackToImage && !playing)
 
+  // Keep centered contain display specifically for the new studio laptop & umbrella
+  const isCenteredProduct =
+    alt.toLowerCase().includes("laptop") ||
+    alt.toLowerCase().includes("studio pro") ||
+    alt.toLowerCase().includes("umbrella") ||
+    image.includes("laptop") ||
+    image.includes("umbrella")
+
+  const imageFittingCls = isCenteredProduct
+    ? "object-contain object-center p-3 sm:p-4"
+    : "object-cover object-center"
+
   return (
     <>
       {(showImage || !videoOnly) && (
@@ -78,11 +92,12 @@ export function CardMedia({
           src={image}
           alt={alt}
           fill
-          className={`object-cover object-center transition-opacity duration-500 ${
+          className={`${imageFittingCls} transition-opacity duration-500 ${
             playing ? "opacity-0" : "opacity-100"
           }`}
           sizes={sizes}
-          loading="lazy"
+          priority={priority}
+          loading={priority ? undefined : "lazy"}
         />
       )}
 
@@ -100,7 +115,7 @@ export function CardMedia({
           aria-hidden
           tabIndex={-1}
           onPlaying={() => setPlaying(true)}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
+          className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-500 ${
             videoOnly || playing ? "opacity-100" : "opacity-0"
           }`}
         />

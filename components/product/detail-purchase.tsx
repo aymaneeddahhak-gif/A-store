@@ -218,11 +218,6 @@ export function DetailPurchase({
 
       {/* Purchase Actions */}
       <div className="space-y-3 pt-2">
-        {isEditing && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[11.5px] text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
-            Editing your cart item — pick the color and size, then update.
-          </div>
-        )}
         <div className="flex items-center gap-2.5">
           {/* Add to Cart / Update cart item */}
           <button

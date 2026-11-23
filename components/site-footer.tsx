@@ -1,7 +1,13 @@
-import Image from "next/image"
+"use client"
 
-/** Site footer — developer credit: logo + mascot. */
+import Image from "next/image"
+import { usePathname } from "next/navigation"
+
+/** Site footer — developer credit: logo + mascot. Hidden on /login for single-screen view. */
 export function SiteFooter() {
+  const pathname = usePathname()
+  if (pathname === "/login") return null
+
   return (
     <footer className="mt-auto border-t border-[var(--border-color)] py-8">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-4 gap-y-3 px-4">
@@ -10,14 +16,14 @@ export function SiteFooter() {
         </span>
         <Image
           src="/images/logo/devloper.png"
-          alt="Developer logo"
+          alt="AED Solutions logo"
           width={180}
           height={60}
           className="h-9 w-auto object-contain dark:invert"
         />
         <Image
           src="/images/logo/devmascot.png"
-          alt="Developer mascot"
+          alt="AED Developer mascot"
           width={64}
           height={96}
           className="h-14 w-auto object-contain"

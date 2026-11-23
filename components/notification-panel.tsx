@@ -50,7 +50,9 @@ export function NotificationPanel() {
         <div
             ref={panelRef}
             className={`
-                fixed top-[64px] right-4 left-4 sm:left-auto sm:w-[380px] max-h-[520px] z-[70]
+                absolute top-full mt-2.5 z-50
+                left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-[-60px] md:right-[-70px]
+                w-[calc(100vw-32px)] sm:w-[380px] max-h-[520px]
                 bg-[var(--drawer-bg)] border border-[var(--border-color)]
                 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.3)]
                 backdrop-blur-md overflow-hidden
@@ -62,19 +64,14 @@ export function NotificationPanel() {
             `}
             role="dialog"
             aria-label="Notifications"
+            aria-hidden={!isNotificationOpen}
+            inert={!isNotificationOpen ? true : undefined}
         >
             {/* Header */}
             <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-[var(--foreground)] tracking-tight">
-                        Notifications
-                    </h3>
-                    {unreadCount > 0 && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                            {unreadCount} new
-                        </span>
-                    )}
-                </div>
+                <h3 className="text-base font-bold text-[var(--foreground)] tracking-tight">
+                    Notifications
+                </h3>
                 <div className="flex items-center gap-1">
                     {unreadCount > 0 && (
                         <button
@@ -141,11 +138,6 @@ export function NotificationPanel() {
                                 ${i < notifications.length - 1 ? "border-b border-[var(--border-color)]/50" : ""}
                             `}
                         >
-                            {/* Unread indicator */}
-                            {!notif.read && (
-                                <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
-                            )}
-
                             <NotificationCard
                                 title={notif.title}
                                 message={notif.message}

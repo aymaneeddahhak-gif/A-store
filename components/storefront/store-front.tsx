@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { PackageSearch } from "lucide-react"
 import { useCatalog } from "@/contexts/providers/catalog-context"
@@ -9,12 +10,20 @@ import { useCart } from "@/contexts/providers/cart-context"
 import type { FilterState, SortBy } from "@/lib/storefront/types"
 import type { DealsPopupConfig } from "@/lib/actions/deals-popup"
 import { FilterCapsulesBar } from "@/components/storefront/filter-capsules-bar"
-import { FilterDrawer } from "@/components/storefront/filter-drawer"
 import { HeroShowcase } from "@/components/storefront/hero-showcase"
 import { ProductCard } from "@/components/storefront/product-card"
-import { DealsPopup } from "@/components/storefront/deals-popup"
 import { toStorefrontProduct } from "@/components/storefront/product-adapter"
 import { StorefrontSkeleton } from "@/components/loading-skeletons"
+
+const FilterDrawer = dynamic(
+  () => import("@/components/storefront/filter-drawer").then((m) => m.FilterDrawer),
+  { ssr: false }
+)
+
+const DealsPopup = dynamic(
+  () => import("@/components/storefront/deals-popup").then((m) => m.DealsPopup),
+  { ssr: false }
+)
 
 const DEFAULT_FILTERS = {
   maxPrice: 8000,
@@ -52,8 +61,26 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
   const [freeShippingOnly, setFreeShippingOnly] = useState(false)
   const [topOrdersOnly, setTopOrdersOnly] = useState(false)
   const [dealsOnly, setDealsOnly] = useState(false)
-  // Entry popup shows on every home visit (no session memory).
-  const [dealsOpen, setDealsOpen] = useState(true)
+  // Entry popup shows once per session so returning to "/" does not re-block the user.
+  const [dealsOpen, setDealsOpen] = useState(false)
+  React.useEffect(() => {
+    try {
+      if (!window.sessionStorage.getItem("astore_deals_dismissed")) {
+        setDealsOpen(true)
+      }
+    } catch {
+      setDealsOpen(true)
+    }
+  }, [])
+
+  const dismissDealsPopup = () => {
+    setDealsOpen(false)
+    try {
+      window.sessionStorage.setItem("astore_deals_dismissed", "1")
+    } catch {
+      // Ignore storage error
+    }
+  }
   const [dealsConfig] = useState<DealsPopupConfig>(
     () =>
       initialDealsConfig ?? {
@@ -103,7 +130,7 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
   const popupPercent = maxDiscount
 
   const handleShopDeals = () => {
-    setDealsOpen(false)
+    dismissDealsPopup()
     setCategory("all")
     setSearchQuery("")
     setDealsOnly(true)
@@ -209,20 +236,13 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
           <div className="flex items-baseline justify-between gap-4 mb-5">
             <div className="flex items-center gap-3">
               <h2 id="all-products-heading" className="text-lg font-black text-[var(--foreground)] tracking-tight">
-                {resultsHeading}
+                {trimmedQuery && filteredProducts.length === 0 && searchSuggestions.length > 0
+                  ? `No exact results for “${trimmedQuery}” — you may like these instead:`
+                  : resultsHeading}
               </h2>
-              {dealsOnly && (
-                <button
-                  type="button"
-                  onClick={() => setDealsOnly(false)}
-                  className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#F05423]/10 text-[#F05423] border border-[#F05423]/30 hover:bg-[#F05423]/20 transition-colors cursor-pointer"
-                >
-                  On sale ×
-                </button>
-              )}
             </div>
             <span className="text-xs font-bold text-[var(--muted-foreground)]">
-              {filteredProducts.length} item{filteredProducts.length === 1 ? "" : "s"}
+              {filteredProducts.length > 0 ? `${filteredProducts.length} item${filteredProducts.length === 1 ? "" : "s"}` : ""}
             </span>
           </div>
 
@@ -233,24 +253,16 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
             <StorefrontSkeleton count={6} />
           ) : filteredProducts.length === 0 ? (
             trimmedQuery && searchSuggestions.length > 0 ? (
-              <div>
-                <p className="text-sm font-bold text-[var(--foreground)] mb-1">
-                  No exact results for &ldquo;{trimmedQuery}&rdquo;
-                </p>
-                <p className="text-xs text-[var(--muted-foreground)] mb-5">
-                  You may like these instead:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-                  {searchSuggestions.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onToggleWishlist={handleToggleWishlist}
-                      onOpenProduct={handleOpenProduct}
-                      onAddToCart={handleAddToCart}
-                    />
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+                {searchSuggestions.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onToggleWishlist={handleToggleWishlist}
+                    onOpenProduct={handleOpenProduct}
+                    onAddToCart={handleAddToCart}
+                  />
+                ))}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-[24px] border border-gray-200/70 text-center">
@@ -268,10 +280,11 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
             )
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product, index) => (
                 <ProductCard
                   key={product.id}
                   product={product}
+                  priority={index < 3}
                   onToggleWishlist={handleToggleWishlist}
                   onOpenProduct={handleOpenProduct}
                   onAddToCart={handleAddToCart}
@@ -301,7 +314,7 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
           title={dealsConfig.title}
           subtitle={dealsConfig.subtitle}
           buttonLabel={dealsConfig.button_label}
-          onClose={() => setDealsOpen(false)}
+          onClose={dismissDealsPopup}
           onShopNow={handleShopDeals}
         />
       )}

@@ -1,12 +1,14 @@
-import { DEMO_ACCOUNTS } from "@/lib/demo-accounts"
-
 /**
- * Portfolio admin — full catalog scope plus user management. There is no
- * roles table; the admin is simply the admin demo login. Every other
- * signed-in seller is sandboxed to their own rows.
+ * Official private store admin — kept off the public `/login` screen.
+ * Only direct email/password sign-in as `admin@a-store.shop` (or `ADMIN_EMAILS`)
+ * grants full official admin privileges.
  */
-const ADMIN_EMAILS = [DEMO_ACCOUNTS.find((a) => a.id === "admin")?.email].filter(
-  (email): email is string => Boolean(email)
+const ADMIN_EMAILS = Array.from(
+  new Set(
+    ["admin@a-store.shop", ...(process.env.ADMIN_EMAILS ?? "").split(",")]
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  )
 )
 
 export function isAdminEmail(email: string | null | undefined): boolean {

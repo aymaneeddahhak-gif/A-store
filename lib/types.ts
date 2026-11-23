@@ -88,6 +88,27 @@ export const ORDER_STATUSES = [
   "Cancelled",
 ] as const
 
+/**
+ * Fulfilment lifecycle — the only moves a professional order flow allows.
+ * Shared by the server actions (enforcement) and the seller UI (options).
+ */
+export const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
+  Pending: ["Confirmed", "Cancelled"],
+  Confirmed: ["Processing", "Cancelled"],
+  Processing: ["Shipped", "Cancelled"],
+  Shipped: ["Delivered"],
+  Delivered: [],
+  Cancelled: [],
+}
+
+/** The statuses an order may move into from where it is now. */
+export function orderNextStatuses(status: string): string[] {
+  return [...(ORDER_TRANSITIONS[status] ?? [])]
+}
+
+/** Entering one of these statuses requires a carrier + tracking number. */
+export const TRACKING_REQUIRED_STATUSES: readonly string[] = ["Shipped"]
+
 export type Notification = {
   id: string
   type: "order" | "promo" | "shipping" | "review" | "system"

@@ -1,30 +1,13 @@
-/** Skeleton for the server-rendered product detail route — mirrors the real
- * page geometry (centered canvas card, breadcrumb, two-column detail) so the
- * swap causes minimal layout shift. */
+import { CartLoader } from "@/components/delivery-loader-overlay"
+
 export default function ProductLoading() {
   return (
-    <div className="w-full px-3 sm:px-6 md:px-8" aria-busy aria-label="Loading product">
-      <div className="w-full rounded-[26px] border border-[var(--border-color)] bg-[var(--card)] p-5 shadow-xl shadow-black/5 sm:p-7 md:rounded-[32px] md:p-9 dark:shadow-black/30">
-        {/* Breadcrumb */}
-        <div className="skeleton-shimmer mb-5 h-3.5 w-64 rounded-md" />
-
-        <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-2 lg:gap-12">
-          {/* Media column */}
-          <div className="skeleton-shimmer aspect-square w-full rounded-[32px]" />
-
-          {/* Details column */}
-          <div className="flex flex-col gap-4">
-            <div className="skeleton-shimmer h-4 w-24 rounded-md" />
-            <div className="skeleton-shimmer h-9 w-4/5 rounded-lg" />
-            <div className="skeleton-shimmer h-6 w-28 rounded-md" />
-            <div className="skeleton-shimmer h-24 w-full rounded-2xl" />
-            <div className="flex gap-3">
-              <div className="skeleton-shimmer h-12 w-36 rounded-full" />
-              <div className="skeleton-shimmer h-12 flex-1 rounded-full" />
-            </div>
-          </div>
-        </div>
-      </div>
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-white/75 dark:bg-black/65 backdrop-blur-md shadow-[inset_0_0_120px_rgba(255,255,255,0.9)] dark:shadow-[inset_0_0_120px_rgba(255,255,255,0.06)]"
+    >
+      <CartLoader message="Loading Product" />
     </div>
   )
 }

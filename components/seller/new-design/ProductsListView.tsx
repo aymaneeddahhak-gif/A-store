@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import {
   Plus,
   Search,
@@ -15,6 +16,7 @@ import {
   CheckCircle2,
   RefreshCw,
   SlidersHorizontal,
+  Pin,
 } from 'lucide-react';
 import { ProductItem } from './types';
 
@@ -25,6 +27,8 @@ interface ProductsListViewProps {
   onOpenAddProduct: () => void;
   onEditProduct: (product: ProductItem) => void;
   onDeleteProduct: (productId: string) => void;
+  onToggleFeatured?: (productId: string, featured: boolean) => void;
+  canFeature?: boolean;
   onUpdateStock?: (
     productId: string,
     newStock: string,
@@ -40,6 +44,8 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
   onOpenAddProduct,
   onEditProduct,
   onDeleteProduct,
+  onToggleFeatured,
+  canFeature = false,
   onUpdateStock,
   onShowToast,
 }) => {
@@ -56,7 +62,6 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
 
   const totalStockUnits = products.reduce((acc, p) => acc + (parseInt(p.stock, 10) || 0), 0);
   const lowStockCount = products.filter((p) => p.status === 'Low Stock').length;
-  const outOfStockCount = products.filter((p) => p.status === 'Out of Stock' || parseInt(p.stock, 10) === 0).length;
   const inStockCount = products.filter((p) => p.status === 'In Stock').length;
 
   const filteredProducts = products.filter((prod) => {
@@ -437,9 +442,12 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-11 h-11 rounded-xl bg-gray-100 dark:bg-gray-800 shrink-0 flex items-center justify-center overflow-hidden">
-                            <img
+                            <Image
                               src={prod.images[0]}
                               alt={prod.name}
+                              width={44}
+                              height={44}
+                              unoptimized
                               className="w-full h-full object-cover"
                             />
                           </div>
@@ -563,11 +571,20 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
             >
               <div>
                 <div className="w-full aspect-4/3 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center relative">
-                  <img
+                  <Image
                     src={prod.images[0] || prod.images[1]}
                     alt={prod.name}
+                    width={320}
+                    height={240}
+                    unoptimized
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
+                  {prod.featured && (
+                    <span className="absolute top-2.5 left-2.5 text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#1e2022] text-[#98e4af] flex items-center gap-1">
+                      <Pin className="w-2.5 h-2.5 stroke-[2.4]" />
+                      On top
+                    </span>
+                  )}
                   <span
                     className={`absolute top-2.5 right-2.5 text-[10px] font-bold px-2 py-0.5 rounded-md ${
                       prod.status === 'In Stock'
@@ -635,6 +652,25 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
               <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
                 <button
                   type="button"
+                  onClick={() => onToggleFeatured?.(prod.id, !prod.featured)}
+                  disabled={!canFeature}
+                  className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors ${
+                    prod.featured
+                      ? 'bg-[#98e4af] border-[#98e4af] text-gray-950'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  } ${canFeature ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                  title={
+                    canFeature
+                      ? prod.featured
+                        ? 'Remove from the homepage showcase'
+                        : 'Show on top of the homepage'
+                      : 'Only the store admin can change the homepage showcase.'
+                  }
+                >
+                  <Pin className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => onEditProduct(prod)}
                   className="h-8 flex-1 rounded-xl bg-[#98e4af] hover:bg-[#88deb3] text-gray-950 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-98"
                 >
@@ -684,9 +720,12 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 shrink-0 flex items-center justify-center overflow-hidden">
-                          <img
+                          <Image
                             src={prod.images[0]}
                             alt={prod.name}
+                            width={40}
+                            height={40}
+                            unoptimized
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -745,6 +784,25 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onToggleFeatured?.(prod.id, !prod.featured)}
+                          disabled={!canFeature}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            prod.featured
+                              ? 'bg-[#98e4af] text-gray-950'
+                              : 'text-gray-400 hover:text-gray-700'
+                          } ${canFeature ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
+                          title={
+                            canFeature
+                              ? prod.featured
+                                ? 'Showing on top'
+                                : 'Show on top of the homepage'
+                              : 'Only the store admin can change the homepage showcase.'
+                          }
+                        >
+                          <Pin className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => onEditProduct(prod)}

@@ -13,6 +13,9 @@ export interface ProductItem {
   sku: string
   productType: string
   images: string[]
+  video?: string
+  /** Pinned to the homepage showcase (store products only). */
+  featured?: boolean
   sales: number
   status: "In Stock" | "Low Stock" | "Out of Stock"
 }

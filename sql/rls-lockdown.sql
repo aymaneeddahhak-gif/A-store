@@ -1,81 +1,80 @@
 -- ============================================================================
 -- RLS LOCKDOWN — run this ONCE in the Supabase Dashboard → SQL Editor
 --
--- Why: an audit (check-rls-anon.mjs) proved that the ANON key can UPDATE and
--- DELETE rows in `products` and `orders`. Anyone on the internet could wipe
--- the catalog and all customer orders with one curl command. This script
--- drops the permissive write policies and recreates strict ones:
+-- Why: Ensures strict Row-Level Security across the catalog and orders.
 --
---   products : public READ, owner-only INSERT/UPDATE/DELETE
---   orders   : owner SELECT/INSERT/UPDATE (admin email may read+update all),
---              NO delete for anyone (the app never deletes orders)
---
--- The server's SUPABASE_SERVICE_ROLE_KEY bypasses RLS entirely, so the
--- admin's seller-dashboard actions (status updates) keep working unchanged.
+--   products : public READ, owner/store-team INSERT/UPDATE/DELETE
+--   orders   : owner + store-team SELECT,
+--              authenticated INSERT (forced to Pending),
+--              store-team ONLY for UPDATE (buyers cannot forge status/total),
+--              NO delete for anyone (orders must be preserved for audit)
 -- ============================================================================
 
--- 1. Drop every existing policy on the two tables (fresh, known state).
+-- 1. Helper function for store team authorization
+CREATE OR REPLACE FUNCTION public.is_store_team()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT lower(coalesce(auth.jwt() ->> 'email', '')) IN (
+    'admin@a-store.shop',
+    'tester@a-store.shop'
+  );
+$$;
+
+-- 2. Drop existing policies on products and orders
 DO $$
 DECLARE r RECORD;
 BEGIN
   FOR r IN
-    SELECT policyname FROM pg_policies
+    SELECT policyname, tablename FROM pg_policies
     WHERE schemaname = 'public' AND tablename IN ('products', 'orders')
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', r.policyname, r.tablename);
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.orders', r.policyname);
   END LOOP;
 END $$;
 
--- 2. Make sure RLS is ON for both tables.
+-- 3. Make sure RLS is ON for both tables
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders   ENABLE ROW LEVEL SECURITY;
 
--- 3. PRODUCTS — the public catalog.
+-- 4. PRODUCTS
 CREATE POLICY "products_select_public"
   ON public.products FOR SELECT
   USING (true);
 
-CREATE POLICY "products_insert_own"
+CREATE POLICY "products_insert_authorized"
   ON public.products FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+  WITH CHECK (user_id = auth.uid() OR public.is_store_team());
 
-CREATE POLICY "products_update_own"
+CREATE POLICY "products_update_authorized"
   ON public.products FOR UPDATE
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
+  USING (user_id = auth.uid() OR public.is_store_team())
+  WITH CHECK (user_id = auth.uid() OR public.is_store_team());
 
-CREATE POLICY "products_delete_own"
+CREATE POLICY "products_delete_authorized"
   ON public.products FOR DELETE
-  USING (user_id = auth.uid());
+  USING (user_id = auth.uid() OR public.is_store_team());
 
--- 4. ORDERS — private to the buyer; the store admin may read + fulfill all.
---    The admin is matched by JWT email so no extra table is needed.
-CREATE POLICY "orders_select_own_or_admin"
+-- 5. ORDERS
+CREATE POLICY "orders_select_own_or_team"
   ON public.orders FOR SELECT
   USING (
     user_id = auth.uid()
-    OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@a-store.shop'
+    OR public.is_store_team()
   );
 
-CREATE POLICY "orders_insert_own"
+CREATE POLICY "orders_insert_authenticated"
   ON public.orders FOR INSERT
-  WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "orders_update_own_or_admin"
-  ON public.orders FOR UPDATE
-  USING (
-    user_id = auth.uid()
-    OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@a-store.shop'
-  )
   WITH CHECK (
     user_id = auth.uid()
-    OR lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@a-store.shop'
+    AND status = 'Pending'
   );
 
--- (No DELETE policy on orders on purpose — deletes are denied for everyone;
---  the service-role admin path bypasses RLS if ever needed.)
+CREATE POLICY "orders_update_team_only"
+  ON public.orders FOR UPDATE
+  USING (public.is_store_team())
+  WITH CHECK (public.is_store_team());
 
--- 5. Verify from the SQL editor:
---    SELECT tablename, policyname, cmd FROM pg_policies
---    WHERE schemaname='public' AND tablename IN ('products','orders');
+-- (No DELETE policy on orders — deletes are denied for all non-service roles)

@@ -3,20 +3,20 @@
 import { revalidatePath, revalidateTag } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { PRODUCTS_CACHE_TAG, invalidateProductCache } from "@/lib/queries/products"
+import { isSupabaseOffline } from "@/lib/supabase-circuit"
+import { getFallbackProducts, setFallbackProducts } from "@/lib/fallback-catalog"
 import type { Product, Review } from "@/lib/types"
 
 const PRODUCTS_TABLE = "products"
 const MAX_COMMENT_LENGTH = 1000
 const MIN_COMMENT_LENGTH = 3
+const MAX_REVIEW_PHOTOS = 4
 
 export type ReviewActionResult<T = null> =
   | { ok: true; data: T; persisted: boolean }
   | { ok: false; error: string }
 
-/** Only the fields a reviewer actually supplies. Author + date are server-side. */
 export type NewReviewInput = { rating: number; comment: string; photos?: string[] }
-
-const MAX_REVIEW_PHOTOS = 4
 
 function sanitizePhotos(input: unknown): string[] | undefined {
   if (!Array.isArray(input)) return undefined
@@ -43,19 +43,21 @@ function validate(input: NewReviewInput): string | null {
   return null
 }
 
-/**
- * Adds a review to a product.
- *
- * Reviews live in a JSON column on `products`, so the append is a
- * read-modify-write. The current array is re-read here rather than accepted
- * from the caller: trusting a client-supplied array would let anyone rewrite
- * every review on the product, and would clobber concurrent submissions.
- *
- * The write needs UPDATE on `products`, which anonymous visitors will not have
- * under a sensible RLS policy. When the write is refused the review is still
- * returned with `persisted: false` so the storefront can show it for the
- * session — the same degradation the orders flow already uses.
- */
+function persistReviewInFallback(productId: number, newReview: Review) {
+  const products = getFallbackProducts()
+  setFallbackProducts(
+    products.map((p) => {
+      if (p.id !== productId) return p
+      const reviews = [newReview, ...(p.reviews ?? [])]
+      const avg = reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
+      return { ...p, reviews, rating: parseFloat(avg.toFixed(1)) }
+    })
+  )
+  invalidateProductCache()
+  revalidateTag(PRODUCTS_CACHE_TAG)
+  revalidatePath(`/product/${productId}`)
+}
+
 export async function addReviewAction(
   productId: number,
   input: NewReviewInput
@@ -73,8 +75,6 @@ export async function addReviewAction(
 
   try {
     const supabase = await createSupabaseServerClient()
-
-    // Attribute the review to the signed-in account when there is one.
     const { data: auth } = await supabase.auth.getUser()
     const authorName =
       (auth?.user?.user_metadata?.username as string | undefined) ||
@@ -92,11 +92,21 @@ export async function addReviewAction(
       ...(photos ? { photos } : {}),
     }
 
+    if (isSupabaseOffline()) {
+      persistReviewInFallback(productId, newReview)
+      return { ok: true, data: newReview, persisted: true }
+    }
+
     const { data: row } = await supabase
       .from(PRODUCTS_TABLE)
       .select("reviews")
       .eq("id", productId)
       .maybeSingle()
+
+    if (isSupabaseOffline()) {
+      persistReviewInFallback(productId, newReview)
+      return { ok: true, data: newReview, persisted: true }
+    }
 
     const existing: Review[] = Array.isArray(row?.reviews) ? (row.reviews as Review[]) : []
     const updatedReviews = [newReview, ...existing]
@@ -120,21 +130,21 @@ export async function addReviewAction(
     invalidateProductCache()
     return { ok: true, data: newReview, persisted: true }
   } catch {
-    return {
-      ok: true,
-      data: {
-        id: crypto.randomUUID(),
-        user: "Guest",
-        rating,
-        comment,
-        date: new Date().toISOString(),
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Guest`,
-        ...(sanitizePhotos(input.photos) ? { photos: sanitizePhotos(input.photos) } : {}),
-      },
-      persisted: false,
+    const fallbackReview: Review = {
+      id: crypto.randomUUID(),
+      user: "Guest",
+      rating,
+      comment,
+      date: new Date().toISOString(),
+      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest",
+      ...(photos ? { photos } : {}),
     }
+    if (isSupabaseOffline()) {
+      persistReviewInFallback(productId, fallbackReview)
+      return { ok: true, data: fallbackReview, persisted: true }
+    }
+    return { ok: true, data: fallbackReview, persisted: false }
   }
 }
 
-// Re-export for callers that still think in Product terms.
 export type { Product }

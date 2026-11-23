@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { useCatalog } from "@/contexts/providers/catalog-context"
 import { toHeroItem } from "@/components/storefront/product-adapter"
 import { CardMedia } from "@/components/product/card-media"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 import type { HeroProductItem } from "@/lib/storefront/types"
 
 /**
@@ -25,6 +26,8 @@ const CENTER_HOLD_MS = 6000
 export const HeroShowcase: React.FC = () => {
   const router = useRouter()
   const { products } = useCatalog()
+  const reducedMotion = useReducedMotion()
+  const [preloadReady, setPreloadReady] = useState(false)
 
   const items = React.useMemo(() => {
     // Admin-pinned products take the stage when any exist; otherwise the
@@ -33,13 +36,6 @@ export const HeroShowcase: React.FC = () => {
     return (featured.length > 0 ? featured : products).map(toHeroItem)
   }, [products])
   const total = items.length
-
-  // Distinct showcase videos, buffered from mount so no center card ever
-  // waits on its clip.
-  const preloadVideos = React.useMemo(
-    () => Array.from(new Set(items.map((item) => item.video).filter((v): v is string => Boolean(v)))),
-    [items]
-  )
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [direction, setDirection] = useState<1 | -1>(1)
@@ -51,16 +47,29 @@ export const HeroShowcase: React.FC = () => {
   const next = items[(currentIndex + 1) % total]
   const farNext = items[(currentIndex + 2 + total) % total]
 
-  // Auto rotation remains active continuously even on hover
+  // Only preload the single upcoming slide's video instead of all 10 MP4s at once
+  const preloadVideos = React.useMemo(
+    () => (next?.video ? [next.video] : []),
+    [next?.video]
+  )
+
+  // Delay background video preloading so it never competes with initial LCP
   useEffect(() => {
-    if (total === 0) return
+    const timer = window.setTimeout(() => setPreloadReady(true), 1500)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  // Auto rotation pauses when tab is hidden or reduced-motion is enabled
+  useEffect(() => {
+    if (total === 0 || reducedMotion) return
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return
       setDirection(1)
       setCurrentIndex((prevIndex) => (prevIndex + 1) % total)
     }, CENTER_HOLD_MS)
 
     return () => clearInterval(interval)
-  }, [total])
+  }, [total, reducedMotion])
 
   if (total === 0 || !current) return null
 
@@ -116,7 +125,7 @@ export const HeroShowcase: React.FC = () => {
           the center card plays the instant its product arrives instead of
           buffering on a blank card. Keyed by src so the elements persist
           across rotations and the cache is never thrown away. */}
-      <HeroVideoPreloaders videos={preloadVideos} />
+      {preloadReady && <HeroVideoPreloaders videos={preloadVideos} />}
       {/* Prefetch the current product's detail route too, so clicking the
           center card opens the page without a server-render wait. */}
       <CenterRoutePrefetcher id={current.id} router={router} />
@@ -141,6 +150,7 @@ export const HeroShowcase: React.FC = () => {
         {/* 2. INNER-LEFT CARD: Scaled smaller with intense deep shadow */}
         <HeroSideCard
           item={prev}
+          priority
           onClick={handlePrev}
           className="hidden md:block relative w-[260px] lg:w-[310px] h-[340px] lg:h-[380px] rounded-[24px] overflow-hidden border border-white/70 shadow-[0_50px_95px_-12px_rgba(0,0,0,0.9),0_24px_48px_-10px_rgba(0,0,0,0.65)] z-10 opacity-75 bg-white shrink-0"
         />
@@ -161,6 +171,7 @@ export const HeroShowcase: React.FC = () => {
         {/* 4. INNER-RIGHT CARD: Scaled smaller with intense deep shadow */}
         <HeroSideCard
           item={next}
+          priority
           onClick={handleNext}
           className="hidden md:block relative w-[260px] lg:w-[310px] h-[340px] lg:h-[380px] rounded-[24px] overflow-hidden border border-white/70 shadow-[0_50px_95px_-12px_rgba(0,0,0,0.9),0_24px_48px_-10px_rgba(0,0,0,0.65)] z-10 opacity-75 bg-white shrink-0"
         />
@@ -212,10 +223,12 @@ function CenterRoutePrefetcher({
  */
 function HeroSideCard({
   item,
+  priority = false,
   onClick,
   className,
 }: {
   item: HeroProductItem
+  priority?: boolean
   onClick: (e?: React.MouseEvent) => void
   className: string
 }) {
@@ -234,6 +247,7 @@ function HeroSideCard({
         video={null}
         alt={item.name}
         active={false}
+        priority={priority}
         sizes="310px"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
@@ -281,6 +295,7 @@ function CenterCard({
         video={item.video}
         alt={item.name}
         active
+        priority
         videoOnly
         eagerVideo
         fallbackToImage

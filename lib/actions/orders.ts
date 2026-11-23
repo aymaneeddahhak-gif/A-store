@@ -4,32 +4,36 @@ import { revalidatePath, revalidateTag } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { listOrdersForUser, listAllOrders } from "@/lib/queries/orders"
-import { listStoreProducts, PRODUCTS_CACHE_TAG, invalidateProductCache } from "@/lib/queries/products"
+import {
+  listStoreProducts,
+  PRODUCTS_CACHE_TAG,
+  invalidateProductCache,
+} from "@/lib/queries/products"
 import { validatePromo } from "@/lib/actions/promos"
 import { isAdminEmail } from "@/lib/admin"
 import { logAudit } from "@/lib/actions/audit"
-import { ORDER_STATUSES, SHIPPING_FEE, type ShippingAddress } from "@/lib/types"
+import { isSupabaseOffline } from "@/lib/supabase-circuit"
+import {
+  getFallbackOrders,
+  setFallbackOrders,
+  getFallbackProducts,
+  setFallbackProducts,
+} from "@/lib/fallback-catalog"
+import {
+  ORDER_STATUSES,
+  TRACKING_REQUIRED_STATUSES,
+  orderNextStatuses,
+  SHIPPING_FEE,
+  type ShippingAddress,
+} from "@/lib/types"
+import { isSellerEmail } from "@/lib/seller"
 import type { CartItem, Order } from "@/lib/types"
-
-/**
- * Server actions — mutations against Supabase.
- *
- * Why server actions (not browser→Supabase):
- *  - Centralized authorization + validation chokepoint
- *  - Avoids exposing mutation paths to the anon key alone
- *  - Lets us revalidate cached pages and run side effects
- *  - Works under restrictive RLS: the server uses the user's session
- *    cookies, so policies evaluate against the authenticated requester
- *
- * All actions return a discriminated result so callers can show toasts
- * without try/catch. They never throw to the client.
- */
 
 const ORDERS_TABLE = "orders"
 const PRODUCTS_TABLE = "products"
 
 export type ActionResult<T = null> =
-  | ({ ok: true; data: T })
+  | { ok: true; data: T }
   | { ok: false; error: string; field?: string }
 
 function fail<T = null>(error: string, field?: string): ActionResult<T> {
@@ -43,7 +47,56 @@ function genOrderId(): string {
   return crypto.randomUUID()
 }
 
-/** Shipping details are validated here too — never trust the client alone. */
+async function adjustStock(
+  fallback: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  items: CartItem[],
+  direction: 1 | -1
+): Promise<void> {
+  if (isSupabaseOffline()) {
+    const products = getFallbackProducts()
+    setFallbackProducts(
+      products.map((p) => {
+        const line = items.find((i) => i.id === p.id)
+        if (!line) return p
+        const qty = Math.min(99, Math.max(1, Math.floor(Number(line.quantity) || 1)))
+        const cur = Math.max(0, Math.floor(Number(p.stock ?? 20)))
+        return { ...p, stock: Math.max(0, cur + direction * qty) }
+      })
+    )
+    invalidateProductCache()
+    revalidateTag(PRODUCTS_CACHE_TAG)
+    return
+  }
+
+  try {
+    const db = createSupabaseAdminClient() ?? fallback
+    for (const item of items) {
+      const quantity = Math.min(99, Math.max(1, Math.floor(Number(item.quantity) || 1)))
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data } = await db
+          .from(PRODUCTS_TABLE)
+          .select("stock")
+          .eq("id", item.id)
+          .maybeSingle()
+        const row = data as { stock?: number | null } | null
+        if (!row) break
+        const current = Math.max(0, Math.floor(Number(row.stock) || 0))
+        const next = Math.max(0, current + direction * quantity)
+        const patch = db.from(PRODUCTS_TABLE).update({ stock: next }).eq("id", item.id)
+        const { data: updated, error } =
+          row.stock === null || row.stock === undefined
+            ? await patch.is("stock", null).select("id")
+            : await patch.eq("stock", current).select("id")
+        if (!error && updated && updated.length > 0) break
+      }
+    }
+  } catch {
+    // Ignore stock error when DB is paused
+  }
+  invalidateProductCache()
+  revalidateTag(PRODUCTS_CACHE_TAG)
+}
+
 function validateShipping(input: unknown):
   | { ok: true; data: ShippingAddress }
   | { ok: false; error: string; field: string } {
@@ -91,14 +144,6 @@ function validateShipping(input: unknown):
   }
 }
 
-/**
- * Places an order as the signed-in session user.
- *
- * Trust boundary: the client decides *which* items and *how many*, the server
- * decides *who* is buying and *what they cost*. The user id comes from the
- * session, and prices are recomputed from the product table so a tampered
- * client can't checkout at $0.
- */
 export async function placeOrderAction(input: {
   items: Array<{ id: number; quantity: number }>
   promoCode?: string
@@ -107,8 +152,6 @@ export async function placeOrderAction(input: {
   try {
     if (input.items.length === 0) return fail("Your cart is empty.")
 
-    // Shipping is validated FIRST so a bad address fails here with the
-    // field named — never as a cryptic database error at the end.
     const shipping = validateShipping(input.shipping)
     if (!shipping.ok) return fail(shipping.error, shipping.field)
 
@@ -116,8 +159,6 @@ export async function placeOrderAction(input: {
     const { data: auth } = await supabase.auth.getUser()
     if (!auth?.user) return fail("You must be signed in to place an order.")
 
-    // Published store rows only — drafts and sandbox products cannot be
-    // bought, even with a forged request.
     const products = await listStoreProducts()
     const items: CartItem[] = []
     for (const line of input.items) {
@@ -145,55 +186,53 @@ export async function placeOrderAction(input: {
       promo_code: promo?.code ?? null,
     }
 
-    const row: Record<string, unknown> = {
-      id: order.id,
-      user_id: order.user_id,
-      items: order.items,
-      total: order.total,
-      status: order.status,
-    }
-    // promo_code column is optional (older schema) — retry without it.
-    if (promo?.code) row.promo_code = promo.code
-    let { error } = await supabase.from(ORDERS_TABLE).insert([row])
-    if (error && promo?.code && error.message.includes("promo_code")) {
-      delete row.promo_code
-      const retry = await supabase.from(ORDERS_TABLE).insert([row])
-      error = retry.error
-    }
-
-    if (error) {
-      console.warn("[orders] placeOrderAction insert failed:", error.message)
-      // The caller keeps the order in session state so the customer still gets
-      // a confirmation rather than a dead end.
-      return fail(error.message)
-    }
-
-    // Decrement stock (best effort — the order itself already succeeded).
-    for (const line of input.items) {
-      const product = products.find((p) => p.id === line.id)
-      if (product?.stock !== undefined) {
-        const quantity = Math.min(99, Math.max(1, Math.floor(line.quantity) || 1))
-        await supabase
-          .from(PRODUCTS_TABLE)
-          .update({ stock: Math.max(0, product.stock - quantity) })
-          .eq("id", line.id)
+    if (!isSupabaseOffline()) {
+      try {
+        const row: Record<string, unknown> = {
+          id: order.id,
+          user_id: order.user_id,
+          items: order.items,
+          total: order.total,
+          status: order.status,
+        }
+        if (promo?.code) row.promo_code = promo.code
+        const db = createSupabaseAdminClient() ?? supabase
+        let { error } = await db.from(ORDERS_TABLE).insert([row])
+        if (error && promo?.code && error.message.includes("promo_code")) {
+          delete row.promo_code
+          const retry = await db.from(ORDERS_TABLE).insert([row])
+          error = retry.error
+        }
+        if (!error) {
+          await adjustStock(supabase, items, -1)
+          revalidateTag(PRODUCTS_CACHE_TAG)
+          revalidatePath("/orders")
+          revalidatePath("/seller")
+          invalidateProductCache()
+          return ok(order)
+        }
+      } catch {
+        // Fall through to fallback order store
       }
     }
 
+    setFallbackOrders([order, ...getFallbackOrders()])
+    await adjustStock(supabase, items, -1)
     revalidateTag(PRODUCTS_CACHE_TAG)
     revalidatePath("/orders")
     revalidatePath("/seller")
     invalidateProductCache()
     return ok(order)
   } catch (err) {
-    console.error("[orders] placeOrderAction database down:", err)
-    return fail("Database connection failed.")
+    console.error("[orders] placeOrderAction failed:", err)
+    return fail("Could not place order.")
   }
 }
 
 export async function updateOrderStatusAction(
   orderId: string,
-  status: string
+  status: string,
+  shipment?: { carrier?: string; trackingNumber?: string }
 ): Promise<ActionResult> {
   if (!ORDER_STATUSES.includes(status as (typeof ORDER_STATUSES)[number])) {
     return fail("Unknown order status.")
@@ -202,28 +241,87 @@ export async function updateOrderStatusAction(
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
     if (!auth?.user) return fail("You must be signed in.")
-    // Fulfillment is admin-only — customers cancel their own orders through
-    // cancelOrderAction below.
-    if (!isAdminEmail(auth.user.email)) {
-      return fail("Restricted to the store admin.")
+    if (!isSellerEmail(auth.user.email)) {
+      return fail("Restricted to the store team.")
     }
 
-    // The write goes through the service role when available so order-level
-    // RLS (orders are owner-writable) can never block the admin's fulfillment
-    // update from the seller dashboard; otherwise the session client is used.
-    const db = createSupabaseAdminClient() ?? supabase
+    if (isSupabaseOffline()) {
+      const orders = getFallbackOrders()
+      const existing = orders.find((o) => o.id === orderId)
+      if (!existing) return fail("Order not found.")
+      const from = existing.status ?? "Pending"
+      if (from === status) return ok(null)
+      if (!orderNextStatuses(from).includes(status)) {
+        return fail(`An order that is ${from} cannot become ${status}.`)
+      }
+      const carrier = (shipment?.carrier ?? existing.carrier ?? "").trim()
+      const trackingNumber = (shipment?.trackingNumber ?? existing.tracking_number ?? "").trim()
+      if (TRACKING_REQUIRED_STATUSES.includes(status) && (!carrier || !trackingNumber)) {
+        return fail("Add the carrier and tracking number before shipping this order.", "tracking")
+      }
+      setFallbackOrders(
+        orders.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status,
+                status_updated_at: new Date().toISOString(),
+                carrier: carrier || o.carrier,
+                tracking_number: trackingNumber || o.tracking_number,
+              }
+            : o
+        )
+      )
+      if (status === "Cancelled" && from !== "Cancelled") {
+        await adjustStock(supabase, existing.items ?? [], 1)
+      }
+      revalidatePath("/orders")
+      revalidatePath("/seller")
+      return ok(null)
+    }
 
-    const { error } = await db
+    const { data: row } = await supabase
       .from(ORDERS_TABLE)
-      .update({ status, status_updated_at: new Date().toISOString() })
+      .select("id, status, carrier, tracking_number, items")
       .eq("id", orderId)
+      .maybeSingle()
+    const existing = row as {
+      status?: string
+      carrier?: string | null
+      tracking_number?: string | null
+      items?: CartItem[] | null
+    } | null
+    if (!existing) return fail("Order not found.")
 
-    // status_updated_at column is optional (older schema) — retry without it.
-    if (error && error.message.includes("status_updated_at")) {
-      const retry = await db.from(ORDERS_TABLE).update({ status }).eq("id", orderId)
-      if (retry.error) return fail(retry.error.message)
-    } else if (error) {
-      return fail(error.message)
+    const from = existing.status ?? "Pending"
+    if (from === status) return ok(null)
+    if (!orderNextStatuses(from).includes(status)) {
+      return fail(`An order that is ${from} cannot become ${status}.`)
+    }
+
+    const carrier = (shipment?.carrier ?? existing.carrier ?? "").trim()
+    const trackingNumber = (shipment?.trackingNumber ?? existing.tracking_number ?? "").trim()
+    if (TRACKING_REQUIRED_STATUSES.includes(status) && (!carrier || !trackingNumber)) {
+      return fail("Add the carrier and tracking number before shipping this order.", "tracking")
+    }
+
+    const db = createSupabaseAdminClient() ?? supabase
+    const payload: Record<string, unknown> = {
+      status,
+      status_updated_at: new Date().toISOString(),
+    }
+    if (carrier) payload.carrier = carrier
+    if (trackingNumber) payload.tracking_number = trackingNumber
+
+    let res = await db.from(ORDERS_TABLE).update(payload).eq("id", orderId).select("id")
+    if (res.error && /status_updated_at|carrier|tracking_number/.test(res.error.message)) {
+      res = await db.from(ORDERS_TABLE).update({ status }).eq("id", orderId).select("id")
+    }
+    if (res.error) return fail(res.error.message)
+    if (!res.data || res.data.length === 0) return fail("Could not update this order.")
+
+    if (status === "Cancelled" && from !== "Cancelled") {
+      await adjustStock(supabase, existing.items ?? [], 1)
     }
 
     revalidatePath("/orders")
@@ -234,11 +332,82 @@ export async function updateOrderStatusAction(
       action: "status",
       entity: "order",
       entityId: orderId,
-      detail: { status },
+      detail: { from, status, carrier: carrier || null, tracking_number: trackingNumber || null },
     })
     return ok(null)
   } catch (err) {
     console.error("[orders] updateOrderStatusAction failed:", err)
+    return fail("Database connection failed.")
+  }
+}
+
+export async function updateOrderShipmentAction(
+  orderId: string,
+  carrier: string,
+  trackingNumber: string
+): Promise<ActionResult> {
+  const label = (carrier ?? "").trim()
+  const code = (trackingNumber ?? "").trim()
+  if (!label || !code) return fail("Carrier and tracking number are both required.")
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data: auth } = await supabase.auth.getUser()
+    if (!auth?.user) return fail("You must be signed in.")
+    if (!isSellerEmail(auth.user.email)) return fail("Restricted to the store team.")
+
+    if (isSupabaseOffline()) {
+      const orders = getFallbackOrders()
+      const existing = orders.find((o) => o.id === orderId)
+      if (!existing) return fail("Order not found.")
+      if (existing.status === "Cancelled" || existing.status === "Delivered") {
+        return fail("This order is closed — its shipment details can no longer change.")
+      }
+      setFallbackOrders(
+        orders.map((o) =>
+          o.id === orderId ? { ...o, carrier: label, tracking_number: code } : o
+        )
+      )
+      revalidatePath("/orders")
+      revalidatePath("/seller")
+      return ok(null)
+    }
+
+    const { data: row } = await supabase
+      .from(ORDERS_TABLE)
+      .select("id, status")
+      .eq("id", orderId)
+      .maybeSingle()
+    const existing = row as { status?: string } | null
+    if (!existing) return fail("Order not found.")
+    if (existing.status === "Cancelled" || existing.status === "Delivered") {
+      return fail("This order is closed — its shipment details can no longer change.")
+    }
+
+    const db = createSupabaseAdminClient() ?? supabase
+    const res = await db
+      .from(ORDERS_TABLE)
+      .update({ carrier: label, tracking_number: code })
+      .eq("id", orderId)
+      .select("id")
+    if (res.error && /carrier|tracking_number/.test(res.error.message)) {
+      return fail("Run sql/orders-lifecycle.sql once to enable shipment tracking.")
+    }
+    if (res.error) return fail(res.error.message)
+    if (!res.data || res.data.length === 0) return fail("Could not save the shipment details.")
+
+    revalidatePath("/orders")
+    revalidatePath("/seller")
+    void logAudit({
+      actorId: auth.user.id,
+      actorEmail: auth.user.email,
+      action: "shipment",
+      entity: "order",
+      entityId: orderId,
+      detail: { carrier: label, tracking_number: code },
+    })
+    return ok(null)
+  } catch (err) {
+    console.error("[orders] updateOrderShipmentAction failed:", err)
     return fail("Database connection failed.")
   }
 }
@@ -249,26 +418,59 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     const { data: auth } = await supabase.auth.getUser()
     if (!auth?.user) return fail("You must be signed in.")
 
-    // Customers may cancel their own orders; the admin may cancel anything.
-    if (!isAdminEmail(auth.user.email)) {
-      const { data: row } = await supabase
-        .from(ORDERS_TABLE)
-        .select("user_id")
-        .eq("id", orderId)
-        .maybeSingle()
-      if ((row as { user_id?: string } | null)?.user_id !== auth.user.id) {
-        return fail("You can only cancel your own orders.")
+    if (isSupabaseOffline()) {
+      const orders = getFallbackOrders()
+      const order = orders.find((o) => o.id === orderId)
+      if (!order) return fail("Order not found.")
+      if (order.status === "Cancelled") return fail("This order is already cancelled.")
+      if (order.status === "Shipped" || order.status === "Delivered") {
+        return fail("This order has shipped and can no longer be cancelled.")
       }
+      setFallbackOrders(
+        orders.map((o) =>
+          o.id === orderId
+            ? { ...o, status: "Cancelled", status_updated_at: new Date().toISOString() }
+            : o
+        )
+      )
+      await adjustStock(supabase, order.items ?? [], 1)
+      revalidatePath("/orders")
+      revalidatePath("/seller")
+      return ok(null)
     }
 
-    const { error } = await supabase
+    const { data: row } = await supabase
+      .from(ORDERS_TABLE)
+      .select("user_id, status, items")
+      .eq("id", orderId)
+      .maybeSingle()
+    const order = row as {
+      user_id?: string
+      status?: string
+      items?: CartItem[] | null
+    } | null
+    if (!order) return fail("Order not found.")
+
+    const admin = isAdminEmail(auth.user.email)
+    if (!admin && order.user_id !== auth.user.id) {
+      return fail("You can only cancel your own orders.")
+    }
+    if (!admin && order.status !== "Pending") {
+      return fail("This order is already confirmed — contact the store to cancel it.")
+    }
+    if (order.status === "Cancelled") return fail("This order is already cancelled.")
+    if (order.status === "Shipped" || order.status === "Delivered") {
+      return fail("This order has shipped and can no longer be cancelled.")
+    }
+
+    const db = createSupabaseAdminClient() ?? supabase
+    const { error } = await db
       .from(ORDERS_TABLE)
       .update({ status: "Cancelled", status_updated_at: new Date().toISOString() })
       .eq("id", orderId)
 
-    // status_updated_at column is optional (older schema) — retry without it.
     if (error && error.message.includes("status_updated_at")) {
-      const retry = await supabase
+      const retry = await db
         .from(ORDERS_TABLE)
         .update({ status: "Cancelled" })
         .eq("id", orderId)
@@ -276,6 +478,8 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     } else if (error) {
       return fail(error.message)
     }
+
+    await adjustStock(supabase, order.items ?? [], 1)
 
     revalidatePath("/orders")
     revalidatePath("/seller")
@@ -293,11 +497,6 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
   }
 }
 
-/**
- * Reads the signed-in user's order history. The id comes from the session
- * rather than the caller, so one user can never request another's orders even
- * if RLS were misconfigured.
- */
 export async function fetchMyOrdersAction(): Promise<ActionResult<Order[]>> {
   try {
     const supabase = await createSupabaseServerClient()
@@ -307,14 +506,10 @@ export async function fetchMyOrdersAction(): Promise<ActionResult<Order[]>> {
     const orders = await listOrdersForUser(auth.user.id)
     return ok(orders)
   } catch {
-    return fail("Could not load your orders.")
+    return ok(getFallbackOrders())
   }
 }
 
-/**
- * Reads every order for the seller dashboard. Requires a session; row-level
- * visibility is RLS's call (a real store would gate on a seller role).
- */
 export async function fetchAllOrdersAction(): Promise<ActionResult<Order[]>> {
   try {
     const supabase = await createSupabaseServerClient()
@@ -323,6 +518,6 @@ export async function fetchAllOrdersAction(): Promise<ActionResult<Order[]>> {
 
     return ok(await listAllOrders())
   } catch {
-    return fail("Could not load orders.")
+    return ok(getFallbackOrders())
   }
 }

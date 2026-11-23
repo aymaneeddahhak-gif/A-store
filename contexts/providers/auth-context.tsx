@@ -1,18 +1,108 @@
 "use client"
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { demoSignOutAction } from "@/lib/actions/demo-login"
+import { isSupabaseOffline } from "@/lib/supabase-circuit"
 import { useToast } from "@/contexts/toast-context"
 
-/**
- * Auth — Supabase session via onAuthStateChange. Split out so cart/catalog
- * components don't re-render on every auth event.
- */
+const DEMO_STORAGE_KEY = "astore_demo_user"
+const DEMO_COOKIE_NAME = "astore_demo_user"
+
+export interface DemoUserInput {
+  id: string
+  email: string
+  fullName: string
+  metadata?: Record<string, unknown>
+}
+
+function buildSyntheticUser(input: DemoUserInput): User {
+  return {
+    id: input.id,
+    email: input.email.toLowerCase(),
+    app_metadata: { provider: "email" },
+    user_metadata: {
+      ...(input.metadata ?? {}),
+      full_name: (input.metadata?.full_name as string | undefined) || input.fullName,
+    },
+    aud: "authenticated",
+    created_at: new Date().toISOString(),
+  } as User
+}
+
+function readStoredDemoRecord(): DemoUserInput | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(DEMO_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as DemoUserInput
+    if (!parsed?.email) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function readStoredDemoUser(): User | null {
+  const record = readStoredDemoRecord()
+  return record ? buildSyntheticUser(record) : null
+}
+
+function hasStoredSupabaseAuth(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    if (document.cookie.includes("sb-")) return true
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) return true
+    }
+    if (window.location.hash.includes("access_token") || window.location.search.includes("code=")) {
+      return true
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+function writeDemoSession(input: DemoUserInput | null) {
+  if (typeof window === "undefined") return
+  try {
+    if (!input) {
+      window.localStorage.removeItem(DEMO_STORAGE_KEY)
+      document.cookie = `${DEMO_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`
+    } else {
+      const payload = JSON.stringify({
+        id: input.id,
+        email: input.email.toLowerCase(),
+        full_name: input.fullName,
+      })
+      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(input))
+      document.cookie = `${DEMO_COOKIE_NAME}=${encodeURIComponent(payload)}; path=/; max-age=604800; SameSite=Lax`
+    }
+  } catch {
+    // Ignore storage errors in restricted browsing modes
+  }
+}
 
 type AuthContextValue = {
   user: User | null
   authLoading: boolean
+  isDemoSession: boolean
+  signInDemo: (input: DemoUserInput) => void
+  updateProfileMetadata: (
+    patch: Record<string, unknown>,
+    options?: { password?: string }
+  ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
 
@@ -22,48 +112,126 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast()
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [isDemoSession, setIsDemoSession] = useState(false)
 
   useEffect(() => {
-    // Fast path: getSession resolves from the local storage session without a
-    // network round trip, so auth-gated pages stop blocking on Supabase's
-    // INITIAL_SESSION event. The subscription below stays the source of truth
-    // for later sign-ins/outs.
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        setUser(data.session?.user ?? null)
-        setAuthLoading(false)
-      })
-      .catch(() => setAuthLoading(false))
+    const storedDemo = readStoredDemoUser()
+    if (storedDemo) {
+      setUser(storedDemo)
+      setIsDemoSession(true)
+      setAuthLoading(false)
+      return
+    }
+
+    // No local demo session AND no Supabase token stored (or circuit already open):
+    // resolve immediately on mount instead of hitting the network or blocking UI.
+    if (isSupabaseOffline() || !hasStoredSupabaseAuth()) {
+      setUser(null)
+      setIsDemoSession(false)
+      setAuthLoading(false)
+    } else {
+      supabase.auth
+        .getSession()
+        .then(({ data }) => {
+          setUser(data.session?.user ?? null)
+          setIsDemoSession(false)
+          setAuthLoading(false)
+        })
+        .catch(() => {
+          setAuthLoading(false)
+        })
+    }
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        setUser(session?.user ?? null)
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        if (session?.user) {
+          setUser(session.user)
+          setIsDemoSession(false)
+        }
         setAuthLoading(false)
       } else if (event === "SIGNED_OUT") {
-        setUser(null)
+        if (!readStoredDemoUser()) {
+          setUser(null)
+          setIsDemoSession(false)
+        }
         setAuthLoading(false)
       }
     })
     return () => subscription.unsubscribe()
   }, [])
 
+  const signInDemo = useCallback(
+    (input: DemoUserInput) => {
+      const existing = readStoredDemoRecord()
+      const merged: DemoUserInput =
+        existing && existing.email.toLowerCase() === input.email.toLowerCase()
+          ? {
+              ...input,
+              metadata: { ...(existing.metadata ?? {}), ...(input.metadata ?? {}) },
+            }
+          : input
+      writeDemoSession(merged)
+      setUser(buildSyntheticUser(merged))
+      setIsDemoSession(true)
+      setAuthLoading(false)
+      showToast(`Signed in as ${merged.fullName}`, "success")
+    },
+    [showToast]
+  )
+
+  const updateProfileMetadata = useCallback(
+    async (
+      patch: Record<string, unknown>,
+      options?: { password?: string }
+    ): Promise<{ error: string | null }> => {
+      if (!user) return { error: "You must be signed in." }
+
+      const demoRecord = readStoredDemoRecord()
+      if (demoRecord || isDemoSession || isSupabaseOffline()) {
+        const nextMeta = { ...(user.user_metadata ?? {}), ...patch }
+        const nextName =
+          typeof nextMeta.full_name === "string" && nextMeta.full_name.trim()
+            ? nextMeta.full_name.trim()
+            : demoRecord?.fullName || "Customer"
+        const nextRecord: DemoUserInput = {
+          id: demoRecord?.id || user.id,
+          email: demoRecord?.email || user.email || "",
+          fullName: nextName,
+          metadata: nextMeta,
+        }
+        writeDemoSession(nextRecord)
+        setUser(buildSyntheticUser(nextRecord))
+        return { error: null }
+      }
+
+      const { data, error } = await supabase.auth.updateUser({
+        ...(options?.password ? { password: options.password } : {}),
+        data: patch,
+      })
+      if (error) return { error: error.message }
+      if (data.user) setUser(data.user)
+      return { error: null }
+    },
+    [user, isDemoSession]
+  )
+
   const signOut = useCallback(async () => {
+    writeDemoSession(null)
+    setIsDemoSession(false)
     try {
-      await supabase.auth.signOut()
+      await Promise.allSettled([demoSignOutAction(), supabase.auth.signOut()])
     } catch {
-      // The local session is cleared regardless, so a failed network round trip
-      // must not leave the user apparently signed in.
+      // Ignore network errors when Supabase is paused
     }
     setUser(null)
     showToast("You have been signed out.", "success")
   }, [showToast])
 
   const value = useMemo(
-    () => ({ user, authLoading, signOut }),
-    [user, authLoading, signOut]
+    () => ({ user, authLoading, isDemoSession, signInDemo, updateProfileMetadata, signOut }),
+    [user, authLoading, isDemoSession, signInDemo, updateProfileMetadata, signOut]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

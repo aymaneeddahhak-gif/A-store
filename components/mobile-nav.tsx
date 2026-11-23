@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -16,14 +16,36 @@ import {
   X,
   LogOut,
   Tag,
+  Package,
+  BadgePercent,
+  Users,
+  Mail,
+  Sliders,
+  ChevronDown,
+  type LucideIcon,
 } from "lucide-react"
 import { useAuth } from "@/contexts/providers/auth-context"
 import { useCatalog } from "@/contexts/providers/catalog-context"
+import { useSellerNav } from "@/contexts/providers/seller-nav-context"
 
 type MobileNavProps = {
   open: boolean
   onClose: () => void
 }
+
+/**
+ * The desktop rail reveals this list on hover; a phone has no hover, so the
+ * drawer carries the same option bar and jumps straight to the section.
+ */
+const SELLER_ITEMS: { id: string; label: string; Icon: LucideIcon }[] = [
+  { id: "Dashboard", label: "Dashboard", Icon: LayoutDashboard },
+  { id: "Products", label: "Products", Icon: Package },
+  { id: "Offers", label: "Offers", Icon: BadgePercent },
+  { id: "Orders", label: "Orders", Icon: ShoppingBag },
+  { id: "Customer", label: "Customer", Icon: Users },
+  { id: "Newsletter", label: "Newsletter", Icon: Mail },
+  { id: "Settings", label: "Settings", Icon: Sliders },
+]
 
 const CATEGORY_ICONS = {
   all: LayoutDashboard,
@@ -40,6 +62,8 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
   const router = useRouter()
   const pathname = usePathname()
   const panelRef = useRef<HTMLDivElement>(null)
+  const { setSellerTab } = useSellerNav()
+  const [sellerOpen, setSellerOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -59,6 +83,12 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
       panelRef.current.focus()
     }
   }, [open])
+
+  const openSellerTab = (id: string) => {
+    setSellerTab(id)
+    onClose()
+    router.push("/seller")
+  }
 
   const pickCategory = (id: string) => {
     setCategory(id)
@@ -122,15 +152,43 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
 
           <div className="my-3 h-px bg-[var(--border-color)]" />
 
-          <Link
-            href="/seller"
-            onClick={onClose}
-            className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors
-              ${pathname === "/seller" ? "bg-[var(--glass-highlight)] text-[var(--foreground)]" : "text-[var(--muted-foreground)] hover:bg-[var(--glass-bg)]"}`}
+          <button
+            type="button"
+            onClick={() => setSellerOpen((open) => !open)}
+            aria-expanded={sellerOpen}
+            aria-controls="mobile-seller-menu"
+            className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors cursor-pointer
+              ${
+                pathname === "/seller"
+                  ? "bg-[var(--glass-highlight)] text-[var(--foreground)]"
+                  : "text-[var(--muted-foreground)] hover:bg-[var(--glass-bg)] hover:text-[var(--foreground)]"
+              }`}
           >
-            <Store size={20} />
-            Seller dashboard
-          </Link>
+            <span className="flex items-center gap-3">
+              <Store size={20} />
+              Seller console
+            </span>
+            <ChevronDown
+              size={18}
+              className={`transition-transform ${sellerOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {sellerOpen && (
+            <div id="mobile-seller-menu" className="space-y-1 pt-0.5">
+              {SELLER_ITEMS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => openSellerTab(id)}
+                  className="flex w-full items-center gap-3 rounded-xl py-2.5 pl-9 pr-3 text-left text-sm transition-colors cursor-pointer text-[var(--muted-foreground)] hover:bg-[var(--glass-bg)] hover:text-[var(--foreground)]"
+                >
+                  <Icon size={18} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {user ? (
             <>

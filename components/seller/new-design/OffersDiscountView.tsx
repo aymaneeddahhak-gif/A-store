@@ -2,21 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Image from "next/image"
-import { X, Plus, Power, Trash2 } from "lucide-react"
-import type { Order, Product } from "@/lib/types"
+import { X } from "lucide-react"
+import type { Product } from "@/lib/types"
 import { useToast } from "@/contexts/toast-context"
-import {
-  listPromosAction,
-  createPromoAction,
-  togglePromoAction,
-  deletePromoAction,
-  type PromoCode,
-} from "@/lib/actions/promos"
+import { listPromosAction, type PromoCode } from "@/lib/actions/promos"
 import {
   getDealsPopupAction,
-  updateDealsPopupAction,
   applyDealsPercentAction,
   clearAppliedPercentAction,
+  type DealsPopupConfig,
 } from "@/lib/actions/deals-popup"
 
 // Exact home-card palette per tier — same card, only the color changes.
@@ -82,161 +76,96 @@ function DealPopupCard({
             strokeWidth="8"
           />
         </svg>
-
         <button
           type="button"
           onClick={onHide}
-          aria-label="Hide preview"
-          className={`absolute top-2 right-2 z-10 p-1.5 ${tier.close} rounded-full transition-colors cursor-pointer`}
+          aria-label={`Hide the ${tier.pct}% preview`}
+          className={`absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/80 ${tier.close} transition-colors cursor-pointer`}
         >
           <X className="w-4 h-4" />
         </button>
-
-        <div className="flex flex-col items-center">
-          <p className={`text-2xl font-extrabold ${tier.title}`}>{title}</p>
-          <p className={`relative text-sm inline-block ${tier.text} after:absolute after:content-[''] after:ml-2 after:top-1/2 ${tier.line} after:w-12 after:h-0.5 before:absolute before:content-[''] before:-ml-14 before:top-1/2 before:w-12 before:h-0.5`}>
-            {subtitle}
-          </p>
-        </div>
-        <span className={`font-extrabold text-7xl xl:text-8xl whitespace-nowrap leading-none -skew-x-12 -skew-y-12 -mt-1 mb-2 ${tier.text}`}>
+        <p className={`text-2xl font-extrabold ${tier.title}`}>{title}</p>
+        <p className={`relative text-sm inline-block ${tier.text} after:absolute after:content-[''] after:ml-2 after:top-1/2 ${tier.line} after:w-12 after:h-0.5 before:absolute before:content-[''] before:-ml-14 before:top-1/2 ${tier.line} before:w-12 before:h-0.5`}>
+          {subtitle}
+        </p>
+        <span className={`font-extrabold text-7xl leading-none -skew-x-12 -skew-y-12 ${tier.text}`}>
           {tier.pct}%
         </span>
-        <Image
-          src="/images/discount/discount.jpeg"
-          alt="Discount mascot"
-          width={480}
-          height={480}
-          className="w-[314px] max-w-full h-auto object-contain -my-2"
-        />
+        <div className="h-[150px] w-full max-w-[340px]">
+          <Image
+            src="/images/discount/discount.jpeg"
+            alt=""
+            width={340}
+            height={150}
+            className="h-full w-full object-cover object-top rounded-xl"
+          />
+        </div>
         <button
           type="button"
-          className={`z-10 px-6 py-3 ${tier.btn} text-gray-50 active:scale-95 transition-all cursor-pointer font-bold text-base rounded-lg`}
+          className={`z-10 px-6 py-2.5 ${tier.btn} text-gray-50 transition-colors font-bold text-base rounded-lg`}
         >
           {buttonLabel}
         </button>
-        <p className={`text-sm mb-1 font-bold tracking-widest ${tier.text}`}>BIG SAVINGS</p>
+        <p className={`text-sm font-bold tracking-widest ${tier.text}`}>BIG SAVINGS</p>
       </div>
-      <div className="flex items-center justify-center gap-2 mt-2">
+
+      <div className="mt-3 flex items-center justify-between px-1">
+        <p className="text-[11px] text-gray-400">
+          {liveCount > 0 ? `${liveCount} live at this tier` : "no live deals at this tier"}
+        </p>
         {showApply && (
           <button
             type="button"
             onClick={onApply}
             disabled={applyBusy}
-            className="px-4 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-bold hover:opacity-85 disabled:opacity-40 transition-opacity cursor-pointer"
           >
             {applyBusy ? "Applying…" : "Apply"}
           </button>
         )}
-        <p className="text-[11px] font-semibold text-gray-400">
-          {liveCount > 0 ? `${liveCount} live at ~${tier.pct}%` : `No live deals at ${tier.pct}%`}
-        </p>
       </div>
     </div>
   )
 }
 
 /**
- * Offers tab — deal-popup ladder (exact home cards, recolored 100→10) plus
- * promo codes in the new design's coupon-card language. All counts live.
+ * Offers tab — the deal-popup ladder only (exact home cards, recolored
+ * 100→10) with admin Apply/Clear. Promo codes and popup-copy editing were
+ * removed by design; the home popup's words come from the seeded defaults.
  */
 export function OffersDiscountView({
-  orders,
   products,
   isAdmin,
 }: {
-  orders: Order[]
   products: Product[]
   /** Only the store admin may apply offer tiers to their own products. */
   isAdmin: boolean
 }) {
   const { showToast } = useToast()
-  const [promos, setPromos] = useState<PromoCode[] | null>(null)
-  const [code, setCode] = useState("")
-  const [percent, setPercent] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [showForm, setShowForm] = useState(false)
+  const [promoCount, setPromoCount] = useState<number | null>(null)
   const [hidden, setHidden] = useState<number[]>([])
-  const [popupTitle, setPopupTitle] = useState("Discount")
-  const [popupSubtitle, setPopupSubtitle] = useState("Up to")
-  const [popupButton, setPopupButton] = useState("Shop now")
-  const [popupEnabled, setPopupEnabled] = useState(true)
-  const [savingPopup, setSavingPopup] = useState(false)
+  const [popupCopy, setPopupCopy] = useState<DealsPopupConfig | null>(null)
   const [applying, setApplying] = useState<number | null>(null)
 
-  const load = useCallback(async () => {
-    const res = await listPromosAction()
-    if (res.ok) setPromos(res.data)
-    else {
-      setPromos([])
-      showToast(res.error, "error")
-    }
-  }, [showToast])
-
   useEffect(() => {
-    void load()
-    void getDealsPopupAction().then((res) => {
-      if (res.ok) {
-        setPopupEnabled(res.data.enabled)
-        setPopupTitle(res.data.title)
-        setPopupSubtitle(res.data.subtitle)
-        setPopupButton(res.data.button_label)
-      }
+    void listPromosAction().then((res: Awaited<ReturnType<typeof listPromosAction>>) => {
+      // Promo codes were removed from this view; we still count active ones
+      // so the ladder's "live" numbers include them, same as before.
+      if (res.ok) setPromoCount(res.data.filter((p: PromoCode) => p.active).length)
     })
-  }, [load])
-
-  const usesOf = useCallback(
-    (promoCode: string) => orders.filter((o) => (o.promo_code ?? "").toUpperCase() === promoCode).length,
-    [orders]
-  )
+    void getDealsPopupAction().then((res) => {
+      if (res.ok) setPopupCopy(res.data)
+    })
+  }, [])
 
   const liveAt = useCallback(
     (pct: number) =>
       products.filter((p) => {
         const d = discountOf(p)
         return d > 0 && Math.round(d / 10) * 10 === pct
-      }).length + (promos ?? []).filter((p) => p.percent_off === pct && p.active).length,
-    [products, promos]
+      }).length + (promoCount ?? 0),
+    [products, promoCount]
   )
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (busy) return
-    setBusy(true)
-    try {
-      const res = await createPromoAction({ code, percent_off: Number(percent) })
-      if (res.ok) {
-        setCode("")
-        setPercent("")
-        setShowForm(false)
-        await load()
-        showToast(`Code ${res.data.code} created.`, "success")
-      } else {
-        showToast(res.error, "error")
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleToggle = async (promo: PromoCode) => {
-    const res = await togglePromoAction(promo.code, !promo.active)
-    if (res.ok) {
-      setPromos((prev) => prev?.map((p) => (p.code === promo.code ? { ...p, active: !p.active } : p)) ?? prev)
-    } else {
-      showToast(res.error, "error")
-    }
-  }
-
-  const handleDelete = async (promo: PromoCode) => {
-    if (!confirm(`Delete promo code ${promo.code}?`)) return
-    const res = await deletePromoAction(promo.code)
-    if (res.ok) {
-      setPromos((prev) => prev?.filter((p) => p.code !== promo.code) ?? prev)
-      showToast("Promo deleted.", "info")
-    } else {
-      showToast(res.error, "error")
-    }
-  }
 
   const handleApply = async (pct: number) => {
     if (applying !== null) return
@@ -268,26 +197,9 @@ export function OffersDiscountView({
     }
   }
 
-  const handleSavePopup = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (savingPopup) return
-    setSavingPopup(true)
-    try {
-      const res = await updateDealsPopupAction({
-        enabled: popupEnabled,
-        title: popupTitle,
-        subtitle: popupSubtitle,
-        button_label: popupButton,
-      })
-      showToast(res.ok ? "Home popup saved." : res.error, res.ok ? "success" : "error")
-    } finally {
-      setSavingPopup(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
-      {/* 1. DEAL POPUP LADDER — exact home cards, 100% → 10% */}
+      {/* DEAL POPUP LADDER — exact home cards, 100% → 10% */}
       <div className="p-6 rounded-[22px] border bg-white border-gray-100 shadow-sm">
         <div className="mb-6">
           <h3 className="text-xl font-bold text-gray-900">Deal Popups 100% → 10%</h3>
@@ -312,9 +224,9 @@ export function OffersDiscountView({
               key={tier.pct}
               tier={tier}
               liveCount={liveAt(tier.pct)}
-              title={popupTitle}
-              subtitle={popupSubtitle}
-              buttonLabel={popupButton}
+              title={popupCopy?.title ?? "Discount"}
+              subtitle={popupCopy?.subtitle ?? "Up to"}
+              buttonLabel={popupCopy?.button_label ?? "Shop now"}
               showApply={isAdmin}
               applyBusy={applying === tier.pct}
               onApply={() => void handleApply(tier.pct)}
@@ -331,145 +243,6 @@ export function OffersDiscountView({
             Show hidden previews ({hidden.length})
           </button>
         )}
-      </div>
-
-      {/* 2. PROMO CODES — new-design coupon cards, live */}
-      <div className="p-6 rounded-[22px] border bg-white border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900">Promotions & Discounts</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Active discount coupons redeemable at checkout</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
-            className="px-4 py-2 rounded-xl bg-[#98e4af] text-gray-950 text-xs font-bold hover:bg-[#88deb3] cursor-pointer"
-          >
-            Create Coupon
-          </button>
-        </div>
-
-        {showForm && (
-          <form onSubmit={handleAdd} className="flex gap-2 mb-5">
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="CODE"
-              aria-label="Promo code"
-              className="flex-1 min-w-0 px-4 py-2.5 bg-[#F3F4F6] rounded-xl text-sm font-mono uppercase outline-none focus:bg-white focus:ring-1 focus:ring-[#98e4af]"
-            />
-            <input
-              type="number"
-              value={percent}
-              onChange={(e) => setPercent(e.target.value)}
-              placeholder="%"
-              aria-label="Percent off"
-              min={1}
-              max={90}
-              className="w-20 px-4 py-2.5 bg-[#F3F4F6] rounded-xl text-sm outline-none focus:bg-white focus:ring-1 focus:ring-[#98e4af]"
-            />
-            <button
-              type="submit"
-              disabled={busy || !code.trim() || !percent}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#98e4af] text-gray-950 rounded-xl text-xs font-bold hover:bg-[#88deb3] disabled:opacity-40 cursor-pointer"
-            >
-              <Plus size={14} aria-hidden /> Add
-            </button>
-          </form>
-        )}
-
-        {promos === null ? (
-          <p className="text-sm text-gray-400">Loading…</p>
-        ) : promos.length === 0 ? (
-          <p className="text-sm text-gray-400">No codes yet — create one above.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {promos.map((promo) => (
-              <div
-                key={promo.code}
-                className="p-5 rounded-2xl border bg-[#F9FAFB] border-gray-200/80"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <span className="px-2.5 py-1 rounded-lg bg-[#98e4af] text-gray-950 font-mono font-bold text-xs">
-                    {promo.code}
-                  </span>
-                  <span className={`text-xs font-semibold ${promo.active ? "text-emerald-600" : "text-gray-400"}`}>
-                    {promo.active ? "Active" : "Off"}
-                  </span>
-                </div>
-                <h4 className="text-xl font-bold tracking-tight text-gray-900">{promo.percent_off}% OFF</h4>
-                <p className="text-xs text-gray-400 mt-1">{usesOf(promo.code)} redemptions</p>
-                <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => void handleToggle(promo)}
-                    aria-label={promo.active ? `Deactivate ${promo.code}` : `Activate ${promo.code}`}
-                    className="p-2 hover:bg-gray-200 rounded-xl transition-all cursor-pointer"
-                  >
-                    <Power size={16} aria-hidden className={promo.active ? "text-emerald-500" : "text-gray-400"} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete(promo)}
-                    aria-label={`Delete ${promo.code}`}
-                    className="p-2 hover:bg-rose-500/10 text-rose-500 rounded-xl transition-all cursor-pointer"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 3. HOME POPUP COPY — same words feed every card above */}
-      <div className="p-6 rounded-[22px] border bg-white border-gray-100 shadow-sm">
-        <div className="mb-5">
-          <h3 className="text-xl font-bold text-gray-900">Home Popup Content</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Title, subtitle and button shown on the home discount popup</p>
-        </div>
-        <form onSubmit={handleSavePopup} className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
-          <input
-            type="text"
-            value={popupTitle}
-            onChange={(e) => setPopupTitle(e.target.value)}
-            aria-label="Popup title"
-            className="px-4 py-2.5 rounded-xl text-sm outline-none bg-[#F3F4F6] text-gray-800 focus:bg-white focus:ring-1 focus:ring-[#98e4af]"
-          />
-          <input
-            type="text"
-            value={popupSubtitle}
-            onChange={(e) => setPopupSubtitle(e.target.value)}
-            aria-label="Popup subtitle"
-            className="px-4 py-2.5 rounded-xl text-sm outline-none bg-[#F3F4F6] text-gray-800 focus:bg-white focus:ring-1 focus:ring-[#98e4af]"
-          />
-          <input
-            type="text"
-            value={popupButton}
-            onChange={(e) => setPopupButton(e.target.value)}
-            aria-label="Popup button label"
-            className="px-4 py-2.5 rounded-xl text-sm outline-none bg-[#F3F4F6] text-gray-800 focus:bg-white focus:ring-1 focus:ring-[#98e4af]"
-          />
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPopupEnabled((v) => !v)}
-              aria-pressed={popupEnabled}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer ${popupEnabled ? "bg-[#98e4af] text-gray-950" : "bg-gray-100 text-gray-500"}`}
-            >
-              {popupEnabled ? "Popup On" : "Popup Off"}
-            </button>
-            <button
-              type="submit"
-              disabled={savingPopup}
-              className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-bold text-xs hover:opacity-90 disabled:opacity-40 cursor-pointer"
-            >
-              {savingPopup ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   )

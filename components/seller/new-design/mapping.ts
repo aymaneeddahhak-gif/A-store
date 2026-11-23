@@ -41,6 +41,8 @@ export function toProductItem(p: Product): ProductItem {
     sku: `SKU-${p.id}`,
     productType: p.category,
     images: images.length ? images : [p.image],
+    video: p.video,
+    featured: !!p.featured,
     sales: p.sold_count ?? 0,
     status: stockStatus(stock),
   }
@@ -310,11 +312,13 @@ export function buildAnalyticsProps(orders: Order[], products: Product[]): Analy
 }
 
 export interface CustomerRow {
+  userId: string
   name: string
   email: string
   orders: number
   total: string
   tier: string
+  lastOrder: string
 }
 
 export function buildCustomerRows(orders: Order[]): CustomerRow[] {
@@ -328,11 +332,16 @@ export function buildCustomerRows(orders: Order[]): CustomerRow[] {
   }
   return [...map.entries()]
     .map(([uid, v]) => ({
+      userId: uid,
       name: `Customer …${uid.slice(-6)}`,
-      email: `${v.orders} orders · last ${v.last ? new Date(v.last).toLocaleDateString() : "—"}`,
+      // Real identity is the admin-only profile lookup's job. This column
+      // stays a stable masked handle — it used to hold a summary string
+      // ("2 orders · last 3/12") that collided as a React key.
+      email: `Buyer account …${uid.slice(-6)}`,
       orders: v.orders,
       total: money(v.total, 2),
       tier: v.total >= 1000 ? "Platinum VIP" : v.total >= 500 ? "Gold Member" : v.total >= 150 ? "Silver Member" : "Standard",
+      lastOrder: v.last ? new Date(v.last).toLocaleDateString() : "",
     }))
     .sort((a, b) => b.orders - a.orders)
 }

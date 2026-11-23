@@ -25,6 +25,10 @@ export function CartDrawer() {
 
     const closeCart = useCallback(() => setCartOpen(false), [setCartOpen])
 
+    useEffect(() => {
+        if (isCartOpen) router.prefetch("/checkout")
+    }, [isCartOpen, router])
+
     // Escape closes the drawer — expected of any overlay surface.
     useEffect(() => {
         if (!isCartOpen) return
@@ -40,7 +44,7 @@ export function CartDrawer() {
             {/* Backdrop */}
             {isCartOpen && (
                 <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity duration-300"
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[105] transition-opacity duration-300"
                     onClick={closeCart}
                 />
             )}
@@ -52,8 +56,9 @@ export function CartDrawer() {
                 aria-modal={isCartOpen}
                 aria-label="Shopping cart"
                 aria-hidden={!isCartOpen}
+                inert={!isCartOpen ? true : undefined}
                 className={`
-          fixed top-0 right-0 h-full w-full max-w-[min(100%,420px)] z-[60]
+          fixed top-0 right-0 h-full w-full max-w-[min(100%,420px)] z-[110]
           bg-[var(--drawer-bg)] border-l border-[var(--border-color)]
           shadow-[-20px_0_50px_rgba(0,0,0,0.3)]
           transform transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
@@ -196,7 +201,7 @@ export function CartDrawer() {
                             }
                         }}
                         disabled={selectedItems.length === 0}
-                        className="w-full py-4 bg-[var(--hero-btn-bg)] text-[var(--hero-btn-text)] font-bold rounded-xl hover:bg-[var(--hero-btn-hover)] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full py-4 bg-[var(--hero-btn-bg)] text-[var(--hero-btn-text)] font-bold rounded-xl hover:bg-[var(--hero-btn-hover)] transition-all flex items-center justify-center gap-2 group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {selectedItems.length === 0 ? "Select items to checkout" : "Checkout"}
                         <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />

@@ -1,31 +1,77 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { DashboardSkeleton } from "@/components/loading-skeletons"
 import { useCatalog } from "@/contexts/providers/catalog-context"
 import { useAuth } from "@/contexts/providers/auth-context"
 import { useToast } from "@/contexts/toast-context"
 import { useThemeContext } from "@/contexts/providers/theme-context"
-import { fetchAllOrdersAction, updateOrderStatusAction } from "@/lib/actions/orders"
-import { listSellerProductsAction } from "@/lib/actions/products"
+import {
+  fetchAllOrdersAction,
+  updateOrderStatusAction,
+  updateOrderShipmentAction,
+} from "@/lib/actions/orders"
+import { listSellerProductsAction, toggleFeaturedAction } from "@/lib/actions/products"
 import { isAdminEmail } from "@/lib/admin"
+import { isSellerEmail } from "@/lib/seller"
+import {
+  isDemoSellerUser,
+  getDemoSellerProducts,
+  saveDemoSellerProducts,
+} from "@/lib/demo-seller-products"
 import type { Order, Product } from "@/lib/types"
 import { SellerRestrictedGate } from "@/components/seller/restricted-gate"
-import { OrderManager, shortOrderId } from "@/components/seller/order-manager"
 import { useSellerNav } from "@/contexts/providers/seller-nav-context"
 import { useNotifications } from "@/contexts/providers/notifications-context"
 import { STATUS_CONFIGS, type OrderStatus } from "@/components/orders/order-notification-card"
 import { Header } from "./new-design/Header"
-import { OverviewView } from "./new-design/OverviewView"
-import { ProductsListView } from "./new-design/ProductsListView"
-import { AddProductView } from "./new-design/AddProductView"
-import { OffersDiscountView } from "./new-design/OffersDiscountView"
-import { AnalyticsView, CustomersView, SettingsView } from "./new-design/LiveViews"
+import {
+  CustomersView,
+  SettingsView,
+  NewsletterView,
+  type ShowcaseProduct,
+} from "./new-design/LiveViews"
+
+const OverviewView = dynamic(
+  () => import("./new-design/OverviewView").then((m) => m.OverviewView),
+  { ssr: false }
+)
+const ProductsListView = dynamic(
+  () => import("./new-design/ProductsListView").then((m) => m.ProductsListView),
+  { ssr: false }
+)
+const AddProductView = dynamic(
+  () => import("./new-design/AddProductView").then((m) => m.AddProductView),
+  { ssr: false }
+)
+const OffersDiscountView = dynamic(
+  () => import("./new-design/OffersDiscountView").then((m) => m.OffersDiscountView),
+  { ssr: false }
+)
+const OrdersView = dynamic(
+  () => import("./new-design/OrdersView").then((m) => m.OrdersView),
+  { ssr: false }
+)
+
+function shortOrderId(id: string) {
+  const parts = id.split("_")
+  const raw = parts.length > 1 ? parts[parts.length - 1] : id
+  return raw.slice(0, 8).toUpperCase()
+}
+import {
+  listSubscribersAction,
+  getStoreSettingsAction,
+  saveStoreSettingsAction,
+  listCustomerProfilesAction,
+  type Subscriber,
+  type StoreSettings,
+  type CustomerProfile,
+} from "@/lib/actions/seller-dashboard"
 import {
   toProductItem,
   toProductPayload,
   buildOverviewProps,
-  buildAnalyticsProps,
   buildCustomerRows,
   lastMonths,
 } from "./new-design/mapping"
@@ -38,19 +84,35 @@ import type { ProductItem } from "./new-design/types"
  * the website's order design; offers use the live discount popup system.
  */
 export function NewSellerDashboard() {
-  const { addProduct, updateProduct, deleteProduct, categories } = useCatalog()
+  const {
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    categories,
+    createCategory,
+    patchProductLocal,
+    refreshProducts,
+  } = useCatalog()
   const { user, authLoading } = useAuth()
   const { showToast } = useToast()
   const { isDarkMode } = useThemeContext()
   const isAdmin = isAdminEmail(user?.email)
+  // Fulfilment is the store team's job (admin + seller logins).
+  const canManageOrders = isSellerEmail(user?.email)
 
   // Tab lives in shared context: the rail flyout and this page drive it.
   const { sellerTab: activeTab, setSellerTab: setActiveTab } = useSellerNav()
   const { pushNotification } = useNotifications()
-  const [orderSearch, setOrderSearch] = useState("")
   const [monthKey, setMonthKey] = useState<string | null>(null)
   const [allOrders, setAllOrders] = useState<Order[]>([])
-  const [sellerProducts, setSellerProducts] = useState<Product[] | null>(null)
+  const [sellerProducts, setSellerProducts] = useState<Product[]>([])
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([])
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>({
+    store_name: "A-store",
+    currency: "USD",
+    notification_email: "",
+  })
+  const [customerProfiles, setCustomerProfiles] = useState<CustomerProfile[] | null>(null)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [isCreatingProduct, setIsCreatingProduct] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -70,20 +132,91 @@ export function NewSellerDashboard() {
     void fetchAllOrdersAction().then((res) => {
       if (active && res.ok) setAllOrders(res.data)
     })
-    void listSellerProductsAction().then((res) => {
-      if (active && res.ok) setSellerProducts(res.data)
-      else if (active) setSellerProducts([])
+    if (isDemoSellerUser(user?.email)) {
+      setSellerProducts(getDemoSellerProducts())
+    } else {
+      void listSellerProductsAction().then((res) => {
+        if (active && res.ok) setSellerProducts(res.data)
+        else if (active) setSellerProducts([])
+      })
+    }
+    void listSubscribersAction().then((res) => {
+      if (active && res.ok) setSubscribers(res.data)
     })
+    void getStoreSettingsAction().then((res) => {
+      if (active && res.ok) setStoreSettings(res.data)
+    })
+    if (isAdminEmail(user?.email)) {
+      void listCustomerProfilesAction().then((res) => {
+        if (active && res.ok) setCustomerProfiles(res.data)
+      })
+    }
     return () => {
       active = false
     }
   }, [user])
 
+  // Pin/unpin a store product from the homepage showcase (admin only, DB-backed).
+  const handleToggleFeatured = useCallback(
+    async (productId: string, featured: boolean) => {
+      if (isDemoSellerUser(user?.email)) {
+        const id = Number(productId)
+        setSellerProducts((prev) => {
+          const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, featured } : p))
+          saveDemoSellerProducts(updated)
+          return updated
+        })
+        showToastMsg(
+          featured
+            ? "Pinned to the showcase (demo seller)."
+            : "Removed from the showcase (demo seller)."
+        )
+        return
+      }
+      const id = Number(productId)
+      const res = await toggleFeaturedAction(id, featured)
+      if (!res.ok) {
+        showToastMsg(res.error || "Could not update the homepage showcase.")
+        return
+      }
+      // Optimistic patch for the list in front of the admin, then re-read the
+      // catalog so the showcase card (and any tab still holding a stale seed)
+      // converges on what the database now says.
+      setSellerProducts((prev) =>
+        prev ? prev.map((p) => (p.id === id ? { ...p, featured } : p)) : prev
+      )
+      patchProductLocal(id, { featured })
+      void refreshProducts()
+      showToastMsg(
+        featured
+          ? "Pinned to the homepage showcase."
+          : "Removed from the homepage showcase."
+      )
+    },
+    [patchProductLocal, refreshProducts, showToastMsg, user?.email]
+  )
+
   const handleStatusChange = useCallback(
-    async (orderId: string, status: string) => {
-      const res = await updateOrderStatusAction(orderId, status)
+    async (
+      orderId: string,
+      status: string,
+      shipment?: { carrier?: string; trackingNumber?: string }
+    ) => {
+      const res = await updateOrderStatusAction(orderId, status, shipment)
       if (res.ok) {
-        setAllOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)))
+        setAllOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  status,
+                  status_updated_at: new Date().toISOString(),
+                  carrier: shipment?.carrier ?? o.carrier,
+                  tracking_number: shipment?.trackingNumber ?? o.tracking_number,
+                }
+              : o
+          )
+        )
         const cfg = STATUS_CONFIGS[status as OrderStatus]
         pushNotification({
           type: "order",
@@ -100,8 +233,43 @@ export function NewSellerDashboard() {
     [showToast, pushNotification]
   )
 
+  const handleShipmentSave = useCallback(
+    async (orderId: string, carrier: string, trackingNumber: string) => {
+      const res = await updateOrderShipmentAction(orderId, carrier, trackingNumber)
+      if (res.ok) {
+        setAllOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, carrier, tracking_number: trackingNumber } : o))
+        )
+        showToast("Shipment details saved.", "success")
+      } else {
+        showToast(res.error || "Could not save the shipment details.", "error")
+      }
+    },
+    [showToast]
+  )
+
   const items: ProductItem[] = useMemo(
     () => (sellerProducts ?? []).map(toProductItem),
+    [sellerProducts]
+  )
+
+  // Store products the admin can pin to the homepage showcase. Built from the
+  // seller's own rows (read straight from the database on every load, and
+  // patched the moment a pin lands) rather than the storefront catalog seed,
+  // which is a streamed snapshot. Sandbox rows owned by a tester are excluded —
+  // featuring is a store-level flag.
+  const showcaseItems: ShowcaseProduct[] = useMemo(
+    () =>
+      (sellerProducts ?? [])
+        .filter((p) => p.user_id == null)
+        .map((p) => ({
+          id: String(p.id),
+          name: p.name,
+          category: p.category,
+          image: p.image,
+          featured: !!p.featured,
+        }))
+        .sort((a, b) => Number(b.featured) - Number(a.featured)),
     [sellerProducts]
   )
   const editingItem = items.find((p) => p.id === editingProductId) ?? null
@@ -119,11 +287,25 @@ export function NewSellerDashboard() {
     () => buildOverviewProps(visibleOrders, sellerProducts ?? []),
     [visibleOrders, sellerProducts]
   )
-  const analytics = useMemo(
-    () => buildAnalyticsProps(visibleOrders, sellerProducts ?? []),
-    [visibleOrders, sellerProducts]
-  )
-  const customerRows = useMemo(() => buildCustomerRows(visibleOrders), [visibleOrders])
+  // Real buyer identities (admin only) keyed by user id for the order console.
+  const buyerDirectory = useMemo(() => {
+    const map: Record<string, { name: string; email: string }> = {}
+    for (const profile of customerProfiles ?? []) {
+      map[profile.id] = { name: profile.name, email: profile.email }
+    }
+    return map
+  }, [customerProfiles])
+
+  const customerRows = useMemo(() => {
+    const rows = buildCustomerRows(visibleOrders)
+    if (!customerProfiles?.length) return rows
+    const profiles = new Map(customerProfiles.map((p) => [p.id, p]))
+    return rows.map((row) => {
+      const match = profiles.get(row.userId)
+      if (!match) return row
+      return { ...row, name: match.name, email: `${match.email} · ${row.email}` }
+    })
+  }, [visibleOrders, customerProfiles])
 
   const handleOpenAddProduct = useCallback(() => {
     setEditingProductId(null)
@@ -137,15 +319,35 @@ export function NewSellerDashboard() {
 
   const handleDeleteProduct = useCallback(
     async (productId: string) => {
+      if (isDemoSellerUser(user?.email)) {
+        const id = Number(productId)
+        setSellerProducts((prev) => {
+          const updated = (prev ?? []).filter((p) => p.id !== id)
+          saveDemoSellerProducts(updated)
+          return updated
+        })
+        showToastMsg("Product deleted from demo seller inventory.")
+        return
+      }
       const ok = await deleteProduct(Number(productId))
       if (ok) setSellerProducts((prev) => (prev ?? []).filter((p) => p.id !== Number(productId)))
     },
-    [deleteProduct]
+    [deleteProduct, user?.email, showToastMsg]
   )
 
   const handleUpdateStock = useCallback(
     async (productId: string, newStock: string) => {
       const stock = Math.max(0, Math.floor(Number(newStock) || 0))
+      if (isDemoSellerUser(user?.email)) {
+        const id = Number(productId)
+        setSellerProducts((prev) => {
+          const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, stock } : p))
+          saveDemoSellerProducts(updated)
+          return updated
+        })
+        showToastMsg("Stock updated in demo seller inventory.")
+        return
+      }
       const ok = await updateProduct(Number(productId), { stock })
       if (ok) {
         setSellerProducts((prev) =>
@@ -153,11 +355,51 @@ export function NewSellerDashboard() {
         )
       }
     },
-    [updateProduct]
+    [updateProduct, user?.email, showToastMsg]
   )
 
   const handleSaved = useCallback(
     async (payload: ReturnType<typeof toProductPayload>, editingId: string | null) => {
+      if (isDemoSellerUser(user?.email)) {
+        if (editingId) {
+          const id = Number(editingId)
+          setSellerProducts((prev) => {
+            const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, ...payload } : p))
+            saveDemoSellerProducts(updated)
+            return updated
+          })
+          setEditingProductId(null)
+          setIsCreatingProduct(false)
+          showToastMsg(`Product "${payload.name}" updated successfully.`)
+          return true
+        }
+        const createdProduct: Product = {
+          id: Date.now(),
+          name: payload.name,
+          price: payload.price,
+          original_price: payload.original_price,
+          category: payload.category,
+          image: payload.image || "/images/product/RMADRIDKIT.png",
+          images: payload.images?.length ? payload.images : [payload.image || "/images/product/RMADRIDKIT.png"],
+          video: payload.video,
+          description: payload.description,
+          stock: payload.stock,
+          is_published: payload.is_published ?? true,
+          featured: payload.featured ?? false,
+          user_id: user?.id || "demo-seller-role-id",
+          likes: 0,
+          rating: 5,
+          reviews: [],
+        }
+        setSellerProducts((prev) => {
+          const updated = [...(prev ?? []), createdProduct]
+          saveDemoSellerProducts(updated)
+          return updated
+        })
+        setIsCreatingProduct(false)
+        showToastMsg(`Product "${createdProduct.name}" added successfully.`)
+        return true
+      }
       if (editingId) {
         const ok = await updateProduct(Number(editingId), payload)
         if (ok) {
@@ -166,8 +408,10 @@ export function NewSellerDashboard() {
           )
           setEditingProductId(null)
           setIsCreatingProduct(false)
+          showToastMsg(`Product "${payload.name}" updated successfully.`)
           return true
         }
+        showToastMsg("Could not update the product — please try again.")
         return false
       }
       const created = await addProduct(payload)
@@ -176,11 +420,13 @@ export function NewSellerDashboard() {
           setSellerProducts((prev) => [...(prev ?? []), created])
         }
         setIsCreatingProduct(false)
+        showToastMsg(`Product "${created.name}" added successfully.`)
         return true
       }
+      showToastMsg("Could not save the product — please try again.")
       return false
     },
-    [addProduct, updateProduct, isAdmin, user?.id]
+    [addProduct, updateProduct, isAdmin, user?.id, user?.email, showToastMsg]
   )
 
   const closeForm = useCallback(() => {
@@ -188,8 +434,11 @@ export function NewSellerDashboard() {
     setEditingProductId(null)
   }, [])
 
-  if (authLoading || (user && sellerProducts === null)) return <DashboardSkeleton />
-  if (!user) return <SellerRestrictedGate />
+  // Never stall /seller behind a blocking skeleton once auth settles:
+  // logged-out users see the guided login gate immediately, and logged-in
+  // users enter the console shell right away while live data hydrates.
+  if (!authLoading && !user) return <SellerRestrictedGate />
+  if (!user) return <DashboardSkeleton />
 
   const showForm = isCreatingProduct
 
@@ -205,8 +454,6 @@ export function NewSellerDashboard() {
         return "Offers"
       case "Orders":
         return "Orders"
-      case "Sales":
-        return "Sales"
       case "Customer":
         return "Customers"
       case "Newsletter":
@@ -242,35 +489,24 @@ export function NewSellerDashboard() {
           />
         )
 
-      case "Analytics":
-      case "Sales":
-      case "Newsletter":
-        return (
-          <AnalyticsView
-            isDarkMode={isDarkMode}
-            metrics={analytics.metrics}
-            channels={analytics.channels}
-            onShowToast={showToastMsg}
-          />
-        )
-
       case "Orders":
         return (
-          <OrderManager
-            orders={allOrders.filter((o) =>
-              o.id.toLowerCase().includes(orderSearch.toLowerCase())
-            )}
-            searchQuery={orderSearch}
-            onSearchChange={setOrderSearch}
-            onStatusChange={(id, s) => void handleStatusChange(id, s)}
-            readOnly={!isAdmin}
+          <OrdersView
+            isDarkMode={isDarkMode}
+            orders={visibleOrders}
+            buyers={buyerDirectory}
+            canManage={canManageOrders}
+            onStatusChange={(id, status, shipment) => void handleStatusChange(id, status, shipment)}
+            onShipmentSave={(id, carrier, trackingNumber) =>
+              void handleShipmentSave(id, carrier, trackingNumber)
+            }
+            onShowToast={showToastMsg}
           />
         )
 
       case "Offers":
         return (
           <OffersDiscountView
-            orders={allOrders}
             products={sellerProducts ?? []}
             isAdmin={isAdmin}
           />
@@ -286,12 +522,36 @@ export function NewSellerDashboard() {
           />
         )
 
+      case "Newsletter":
+        return (
+          <NewsletterView
+            isDarkMode={isDarkMode}
+            subscribers={subscribers}
+            onShowToast={showToastMsg}
+          />
+        )
+
       case "Settings":
         return (
           <SettingsView
             isDarkMode={isDarkMode}
-            notificationEmail={user.email ?? ""}
-            onShowToast={showToastMsg}
+            storeName={storeSettings.store_name}
+            currency={storeSettings.currency}
+            notificationEmail={storeSettings.notification_email || user.email || ""}
+            canSave={isAdmin}
+            showcase={showcaseItems}
+            canManageShowcase={isAdmin}
+            onToggleShowcase={(id, featured) => void handleToggleFeatured(id, featured)}
+            onSave={(s) => {
+              void saveStoreSettingsAction(s).then((res) => {
+                if (res.ok) {
+                  setStoreSettings((prev) => ({ ...prev, ...s }))
+                  showToastMsg("Store settings saved successfully.")
+                } else {
+                  showToastMsg(res.error)
+                }
+              })
+            }}
           />
         )
 
@@ -308,6 +568,8 @@ export function NewSellerDashboard() {
               onEditProduct={handleEditProduct}
               onDeleteProduct={(id) => void handleDeleteProduct(id)}
               onUpdateStock={(id, stock) => void handleUpdateStock(id, stock)}
+              onToggleFeatured={(id, featured) => void handleToggleFeatured(id, featured)}
+              canFeature={isAdmin}
               onShowToast={showToastMsg}
             />
           )
@@ -316,7 +578,8 @@ export function NewSellerDashboard() {
         return (
           <AddProductView
             initial={editingItem}
-            categories={categories.filter((c) => c.id !== "all").map((c) => c.id)}
+            categories={categories.filter((c) => c.id !== "all")}
+            onAddCategory={createCategory}
             onBack={closeForm}
             onSaved={handleSaved}
             onToast={showToastMsg}
@@ -338,7 +601,7 @@ export function NewSellerDashboard() {
           />
 
           <div className="md:hidden flex gap-1.5 mb-4 overflow-x-auto">
-            {["Dashboard", "Analytics", "Products", "Orders", "Offers", "Sales", "Customer", "Newsletter", "Settings"].map((t) => (
+            {["Dashboard", "Products", "Orders", "Offers", "Customer", "Newsletter", "Settings"].map((t) => (
               <button
                 key={t}
                 type="button"
@@ -365,9 +628,8 @@ export function NewSellerDashboard() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-6 right-6 z-50 bg-[#1e2022] text-white px-5 py-3 rounded-2xl shadow-xl border border-gray-700/60 text-sm font-medium flex items-center gap-2.5"
+          className="fixed bottom-6 right-6 z-50 bg-[#1e2022] text-white px-5 py-3 rounded-2xl shadow-xl border border-gray-700/60 text-sm font-medium"
         >
-          <div className="w-2 h-2 rounded-full bg-[#98e4af] animate-pulse" />
           <span>{toastMessage}</span>
         </div>
       )}

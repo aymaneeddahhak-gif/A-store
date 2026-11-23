@@ -90,11 +90,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         { label: "Undo", onClick: undoAdd },
         { label: "View Cart", onClick: () => setIsCartOpen(true) },
       ], {
-        title: "Added to cart!",
+        title: "Added to cart",
         productName: product.name,
         price: `$${product.price.toFixed(2)}`,
-        icon: "cart",
-        accent: "teal",
+        icon: "check",
+        accent: "emerald",
       })
       pokeMascot("cart")
     },

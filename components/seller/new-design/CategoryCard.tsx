@@ -3,10 +3,15 @@
 import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
+export interface CategoryOption {
+  id: string;
+  label: string;
+}
+
 interface CategoryCardProps {
   category: string;
   onCategoryChange: (cat: string) => void;
-  categories: string[];
+  categories: CategoryOption[];
   onAddCategory: (newCat: string) => void;
 }
 
@@ -24,7 +29,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     e.preventDefault();
     if (newCatInput.trim()) {
       onAddCategory(newCatInput.trim());
-      onCategoryChange(newCatInput.trim());
       setNewCatInput('');
       setIsAddingNew(false);
     }
@@ -37,13 +41,13 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
         <div className="relative">
           <label className="block text-[13px] font-semibold mb-2 text-gray-800">Product Category</label>
           <div onClick={() => setShowDropdown(!showDropdown)} className="w-full px-4 py-3 rounded-xl text-sm flex items-center justify-between cursor-pointer select-none bg-[#F3F4F6] text-gray-800 hover:bg-gray-200/80">
-            <span className="truncate">{category}</span>
+            <span className="truncate">{categories.find((c) => c.id === category)?.label ?? category}</span>
             <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-2 bg-gray-800 text-white"><ChevronDown className="w-2.5 h-2.5" /></div>
           </div>
           {showDropdown && (
             <div className="absolute left-0 right-0 mt-1.5 py-1.5 rounded-xl shadow-lg border z-50 bg-white border-gray-200 text-gray-800 max-h-56 overflow-y-auto">
               {categories.map((cat) => (
-                <div key={cat} onClick={() => { onCategoryChange(cat); setShowDropdown(false); }} className={`px-4 py-2 text-xs font-medium cursor-pointer hover:bg-[#98e4af]/20 ${category === cat ? 'font-bold text-emerald-600' : ''}`}>{cat}</div>
+                <div key={cat.id} onClick={() => { onCategoryChange(cat.id); setShowDropdown(false); }} className={`px-4 py-2 text-xs font-medium cursor-pointer hover:bg-[#98e4af]/20 ${category === cat.id ? 'font-bold text-emerald-600' : ''}`}>{cat.label}</div>
               ))}
             </div>
           )}

@@ -38,6 +38,7 @@ export interface EcommerceProduct {
   rating?: number
   reviewsCount?: number
   badge?: string
+  isPremium?: boolean
   /** Units available. Undefined means unlimited. */
   stock?: number
   specs: [ProductSpec, ProductSpec, ProductSpec]

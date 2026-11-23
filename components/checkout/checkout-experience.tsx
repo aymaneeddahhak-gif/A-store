@@ -15,9 +15,7 @@ import {
   CheckCircle2,
   Loader2,
 } from "lucide-react"
-import { CheckoutSkeleton } from "@/components/loading-skeletons"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
-import { supabase } from "@/lib/supabase"
 import { useToast } from "@/contexts/toast-context"
 import { useCart } from "@/contexts/providers/cart-context"
 import { useAuth } from "@/contexts/providers/auth-context"
@@ -41,7 +39,7 @@ function FieldError({ message }: { message: string }) {
 export function CheckoutExperience() {
   const { selectedItems, selectedSubtotal, updateQuantity, removeFromCart, removeSelected, setCartOpen } =
     useCart()
-  const { user, authLoading } = useAuth()
+  const { user, authLoading, updateProfileMetadata } = useAuth()
   const { placeOrder } = useOrders()
   const { showToast } = useToast()
   const reducedMotion = useReducedMotion()
@@ -76,7 +74,7 @@ export function CheckoutExperience() {
 
   useEffect(() => {
     if (authLoading) return
-    if (!user) router.replace("/login")
+    if (!user) router.replace("/login?next=/checkout")
   }, [user, authLoading, router])
 
   // One-time autofill from the account + saved delivery address. Only fills
@@ -190,6 +188,7 @@ export function CheckoutExperience() {
   const handlePlaceOrder = async () => {
     if (isProcessing || selectedItems.length === 0 || !shippingValid || !paymentValid) return
     setIsProcessing(true)
+    window.dispatchEvent(new CustomEvent("start-delivery-loading", { detail: { message: "Processing Order" } }))
     const { order, field } = await placeOrder(
       selectedItems,
       promoApplied ? promoCode : undefined,
@@ -204,6 +203,7 @@ export function CheckoutExperience() {
       }
     )
     setIsProcessing(false)
+    window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
     if (!order) {
       // Server-named field problem: jump back to shipping and highlight it
       // instead of dying on a cryptic error at the last step.
@@ -222,34 +222,42 @@ export function CheckoutExperience() {
     setStep("success")
     // Remember the delivery address on the profile for next checkout.
     // Best effort — the order already succeeded.
-    void (async () => {
-      try {
-        await supabase.auth.updateUser({
-          data: {
-            address: {
-              firstName: formData.firstName.trim(),
-              lastName: formData.lastName.trim(),
-              address: formData.address.trim(),
-              city: formData.city.trim(),
-              postalCode: formData.postalCode.trim(),
-              country: formData.country,
-            },
-          },
-        })
-      } catch {
-        /* ignore */
-      }
-    })()
+    void updateProfileMetadata({
+      address: {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        address: formData.address.trim(),
+        city: formData.city.trim(),
+        postalCode: formData.postalCode.trim(),
+        country: formData.country,
+      },
+    }).catch(() => undefined)
     setTimeout(() => router.push("/profile?tab=orders"), 4000)
   }
 
-  if (authLoading || !user) {
-    return <CheckoutSkeleton />
+  if (!authLoading && !user) {
+    return (
+      <div className="pt-2 pb-12 px-4 max-w-3xl mx-auto">
+        <div className="bg-white rounded-[26px] shadow-2xl shadow-neutral-900/10 p-10 text-center space-y-4">
+          <h2 className="text-lg font-bold text-neutral-900">Sign in to complete checkout</h2>
+          <p className="text-xs text-neutral-500">
+            Redirecting you to the login page so your order links to your account.
+          </p>
+          <Link
+            href="/login?next=/checkout"
+            prefetch
+            className="inline-flex items-center justify-center bg-black hover:bg-neutral-800 text-white font-medium py-3 px-8 rounded-xl text-xs transition-colors"
+          >
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   if (step === "success" && placedOrder) {
     return (
-      <div className="pt-24 pb-12 px-4 max-w-5xl mx-auto">
+      <div className="pt-0 pb-12 px-4 max-w-5xl mx-auto">
         <div className="w-full max-w-5xl mx-auto bg-white rounded-[26px] md:rounded-[32px] shadow-2xl shadow-neutral-900/10 p-8 md:p-12">
           <div className="text-center py-8 space-y-4 max-w-md mx-auto">
             <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
@@ -290,7 +298,7 @@ export function CheckoutExperience() {
 
   if (selectedItems.length === 0) {
     return (
-      <div className="pt-24 pb-12 px-4 max-w-5xl mx-auto">
+      <div className="pt-0 pb-12 px-4 max-w-5xl mx-auto">
         <div className="bg-white rounded-[26px] md:rounded-[32px] shadow-2xl shadow-neutral-900/10 p-12 text-center">
           <p className="text-sm text-neutral-500">Your bag is empty.</p>
           <button
@@ -305,12 +313,12 @@ export function CheckoutExperience() {
   }
 
   return (
-    <div className="pt-28 pb-12 px-4 max-w-[92rem] mx-auto">
-      <div className="w-full bg-white rounded-[26px] md:rounded-[32px] shadow-2xl shadow-neutral-900/10 p-5 sm:p-8 md:p-10 relative">
+    <div className="-mt-4 sm:-mt-6 lg:-mt-8 pb-10 px-4 max-w-[92rem] mx-auto">
+      <div className="w-full bg-white rounded-[26px] md:rounded-[32px] shadow-2xl shadow-neutral-900/10 p-5 sm:p-7 md:p-8 relative">
         {/* Breadcrumb path */}
         <nav
           aria-label="Breadcrumb"
-          className="flex items-center gap-2 text-sm font-medium text-neutral-400 mb-5"
+          className="flex items-center gap-2 text-sm font-medium text-neutral-400 mb-3"
         >
           <Link href="/" className="hover:text-neutral-600 cursor-pointer transition-colors">
             Store
@@ -323,9 +331,9 @@ export function CheckoutExperience() {
           </span>
         </nav>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 items-center mt-2">
-          {/* ================= LEFT: MASCOT (no plate, transparent video) ================= */}
-          <div className="w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-start">
+          {/* ================= LEFT: MASCOT (larger, zero wasted top space) ================= */}
+          <div className="w-full lg:col-span-7">
             <div className="relative flex w-full items-center justify-center select-none">
               <video
                 src="/videos/mascot/checkoutcartvideotrsprnt.webm"
@@ -335,7 +343,7 @@ export function CheckoutExperience() {
                 playsInline
                 preload="auto"
                 aria-label="Store mascot with shopping cart"
-                className="w-full h-auto max-h-[620px] object-contain"
+                className="w-full h-auto max-h-[700px] object-contain"
               />
             </div>
             <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-widest text-neutral-400">
@@ -344,7 +352,7 @@ export function CheckoutExperience() {
           </div>
 
           {/* ================= RIGHT: MULTI-STEP CHECKOUT ================= */}
-          <div className="w-full flex flex-col rounded-2xl border border-neutral-100 bg-[#fbfaf8] overflow-hidden">
+          <div className="w-full lg:col-span-5 flex flex-col rounded-2xl border border-neutral-100 bg-[#fbfaf8] overflow-hidden">
             {/* Step header */}
             <div className="px-6 sm:px-8 py-5 border-b border-neutral-100 flex items-center justify-between bg-white">
               <div>
@@ -618,6 +626,33 @@ export function CheckoutExperience() {
 
                   {formData.paymentMethod === "card" && (
                     <div className="space-y-3 pt-1">
+                      {Array.isArray(user?.user_metadata?.payment_cards) &&
+                        (user.user_metadata.payment_cards as Array<{ id: string; brand: string; last4: string; exp: string }>).length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="block text-[11px] font-medium text-neutral-500">
+                              Saved Profile Cards
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(user.user_metadata.payment_cards as Array<{ id: string; brand: string; last4: string; exp: string }>).map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      cardNumber: `4242 4242 4242 ${c.last4}`,
+                                      cardExp: c.exp,
+                                      cardCvc: "123",
+                                    }))
+                                  }
+                                  className="px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white hover:border-black text-[11px] font-semibold text-neutral-800 cursor-pointer transition-colors"
+                                >
+                                  {c.brand} •••• {c.last4} ({c.exp})
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       <div>
                         <label className="block text-neutral-600 mb-1 font-medium">
                           Card Number

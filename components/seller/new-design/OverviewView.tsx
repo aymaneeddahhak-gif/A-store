@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import {
   DollarSign,
   ShoppingCart,
@@ -319,9 +320,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   }`}
                 >
                   <div className="w-full aspect-square rounded-xl overflow-hidden flex items-center justify-center relative group-hover:scale-102 transition-transform duration-200 bg-gray-100 dark:bg-gray-800">
-                    <img
+                    <Image
                       src={sneaker.image}
                       alt={sneaker.name}
+                      width={160}
+                      height={160}
+                      unoptimized
                       className="w-full h-full object-cover"
                     />
                   </div>

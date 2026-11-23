@@ -19,17 +19,13 @@ const eslintConfig = [
       "**/*.config.{mjs,js,ts}",
       "**/next-env.d.ts",
       "**/.next/types/**",
-      // Local tooling / scratch directories — not part of the app source.
       "**/.agents/**",
       "**/.claude/**",
       "**/.zcode/**",
-      // Reference copy of the storefront design source.
-      "**/newdesing/**",
+      "**/.freebuff/**",
+      "check-*.mjs",
     ],
   },
-  // Flat-config adapter for the legacy Next.js shareable configs.
-  // `next lint` shows a cosmetic "plugin not detected" warning under flat config,
-  // but the rules ARE applied (e.g. @next/next/no-img-element fires correctly).
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {

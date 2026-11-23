@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence } from "motion/react"
 import { X, ZoomIn, Play } from "lucide-react"
@@ -26,6 +26,15 @@ export function DetailGallery({
 }) {
   const [showMoreModal, setShowMoreModal] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
+
+  useEffect(() => {
+    if (!showMoreModal) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowMoreModal(false)
+    }
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [showMoreModal])
 
   const current = media[selectedIndex] ?? media[0]
   if (!current) return null
@@ -158,15 +167,24 @@ export function DetailGallery({
 
       {/* All-angles Lightbox Modal */}
       {showMoreModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${title} gallery`}
+          onClick={() => setShowMoreModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
               <h3 className="text-base font-bold text-neutral-900">Product Gallery • {title}</h3>
               <button
                 type="button"
                 onClick={() => setShowMoreModal(false)}
                 aria-label="Close gallery"
-                className="p-1.5 text-neutral-400 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors"
+                className="p-1.5 text-neutral-400 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -174,13 +192,14 @@ export function DetailGallery({
 
             <div className="grid grid-cols-2 gap-4 mt-5">
               {media.map((item, idx) => (
-                <div
+                <button
+                  type="button"
                   key={`${item.kind}-${item.src}-modal`}
                   onClick={() => {
                     select(idx)
                     setShowMoreModal(false)
                   }}
-                  className="bg-[#f2f0eb] rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-black transition-all"
+                  className="bg-[#f2f0eb] rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-black transition-all text-left"
                 >
                   {item.kind === "video" ? (
                     <span className="w-full h-36 flex items-center justify-center">
@@ -201,7 +220,7 @@ export function DetailGallery({
                   <span className="text-xs font-medium text-neutral-600 mt-2">
                     {item.kind === "video" ? "Showcase video" : `Angle 0${idx + 1}`}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </div>

@@ -7,29 +7,22 @@ import { useRouter } from "next/navigation"
 import {
   Camera,
   Heart,
-  Globe,
-  MapPin,
   CreditCard,
-  LogOut,
   Check,
   Eye,
   EyeOff,
   ChevronDown,
   User,
   X,
-  ShoppingBag,
-  Truck,
-  Copy,
-  Package,
 } from "lucide-react"
 import { useAuth } from "@/contexts/providers/auth-context"
 import { useCatalog } from "@/contexts/providers/catalog-context"
 import { useLikes } from "@/contexts/providers/likes-context"
 import { useOrders } from "@/contexts/providers/orders-context"
 import { useToast } from "@/contexts/toast-context"
-import { OrderStatusPill } from "@/components/orders/order-status"
-import { getStatusStyle, shortOrderId } from "@/components/seller/order-manager"
-import { supabase } from "@/lib/supabase"
+import ProfileAccountMenu, { type ProfileTab as MenuTab } from "@/components/profile/profile-account-menu"
+import OrdersTrackingDashboard from "@/components/profile/orders-tracking-dashboard"
+import { UserAvatar } from "@/components/avatars/role-avatar"
 import { uploadMediaAction } from "@/lib/actions/media"
 import { ProfileSkeleton } from "@/components/loading-skeletons"
 import type { ShippingAddress } from "@/lib/types"
@@ -99,33 +92,8 @@ function downscaleImage(file: File): Promise<File> {
   })
 }
 
-/** Fulfillment pipeline — every order moves through these stages in order. */
-const TRACK_STAGES = [
-  { title: "Order Placed", subtitle: "We received your order." },
-  { title: "Confirmed", subtitle: "Payment authorized." },
-  { title: "Processing", subtitle: "Packing your items." },
-  { title: "Shipped", subtitle: "Handed to the carrier." },
-  { title: "Delivered", subtitle: "Package received." },
-] as const
-
-const STAGE_INDEX: Record<string, number> = {
-  Pending: 0,
-  Confirmed: 1,
-  Processing: 2,
-  Shipped: 3,
-  Delivered: 4,
-}
-
-function shortDate(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime())
-    ? null
-    : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-}
-
 export function ProfileClient() {
-  const { user, authLoading, signOut } = useAuth()
+  const { user, authLoading, signOut, updateProfileMetadata } = useAuth()
   const { products } = useCatalog()
   const { likedProducts, toggleLike } = useLikes()
   const { orders } = useOrders()
@@ -142,11 +110,6 @@ export function ProfileClient() {
   const [showPassword, setShowPassword] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
-  const [ordersFilter, setOrdersFilter] = useState<"all" | "in-transit" | "delivered">("all")
-  const [copiedCode, setCopiedCode] = useState(false)
-  // Floating profile menu (hover flyout, like the seller rail).
-  const [menuOpen, setMenuOpen] = useState(false)
   // Address editor
   const [editingAddress, setEditingAddress] = useState(false)
   const [addressForm, setAddressForm] = useState({ firstName: "", lastName: "", address: "", city: "", postalCode: "", country: "" })
@@ -203,46 +166,6 @@ export function ProfileClient() {
   const savedAddress = (meta.address ?? {}) as Partial<ShippingAddress>
   const favouriteItems = products.filter((p) => likedProducts.includes(p.id))
 
-  // Real orders only — newest first (the query already sorts desc).
-  const transitCount = orders.filter((o) => o.status === "Processing" || o.status === "Shipped").length
-  const deliveredCount = orders.filter((o) => o.status === "Delivered").length
-  const visibleOrders = orders.filter((o) => {
-    if (ordersFilter === "in-transit") return o.status === "Processing" || o.status === "Shipped"
-    if (ordersFilter === "delivered") return o.status === "Delivered"
-    return true
-  })
-  const selectedOrder = visibleOrders.find((o) => o.id === selectedOrderId) ?? visibleOrders[0] ?? null
-  const selectedIdx = selectedOrder ? (STAGE_INDEX[selectedOrder.status] ?? 0) : 0
-  const selectedCancelled = selectedOrder?.status === "Cancelled"
-  const selectedTracking = selectedOrder
-    ? selectedOrder.tracking_number || `TRK-${selectedOrder.id.slice(0, 8).toUpperCase()}`
-    : ""
-  const selectedEta = selectedOrder
-    ? shortDate(new Date(new Date(selectedOrder.created_at).getTime() + 4 * 86400000).toISOString()) || "—"
-    : "—"
-  const destinationLine = [savedAddress.address, savedAddress.city, savedAddress.postalCode]
-    .filter(Boolean)
-    .join(", ")
-
-  const navMenuItems = [
-    { id: "orders" as const, label: "My Orders", icon: ShoppingBag, count: String(orders.length), detail: null as string | null },
-    { id: "favourites" as const, label: "Favourites", icon: Heart, count: null as string | null, detail: null as string | null },
-    { id: "language" as const, label: "Language", icon: Globe, count: null as string | null, detail: "English" },
-    { id: "address" as const, label: "Address", icon: MapPin, count: null as string | null, detail: null as string | null },
-    { id: "payment" as const, label: "Payment", icon: CreditCard, count: null as string | null, detail: null as string | null },
-  ]
-
-  const copyTrackingNumber = async () => {
-    if (!selectedTracking) return
-    try {
-      await navigator.clipboard.writeText(selectedTracking)
-      setCopiedCode(true)
-      window.setTimeout(() => setCopiedCode(false), 2000)
-    } catch {
-      showToast("Could not copy the tracking number.", "error")
-    }
-  }
-
   const handleSave = async () => {
     if (saving) return
     if (!name.trim()) {
@@ -255,23 +178,22 @@ export function ProfileClient() {
     }
     setSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({
-        ...(newPassword ? { password: newPassword } : {}),
-        data: {
+      const { error } = await updateProfileMetadata(
+        {
           full_name: name.trim(),
           username: username.trim(),
           phone_code: phoneCode.trim(),
           phone_number: phoneNumber.trim(),
         },
-      })
+        newPassword ? { password: newPassword } : undefined
+      )
       if (error) {
-        showToast(error.message, "error")
+        showToast(error, "error")
         return
       }
       setNewPassword("")
-      showToast("Profile changes successfully saved!", "success", undefined, {
-        title: "Profile saved!",
-        wave: true,
+      showToast("Your account details have been updated.", "success", undefined, {
+        title: "Profile saved",
       })
     } finally {
       setSaving(false)
@@ -301,12 +223,21 @@ export function ProfileClient() {
       const fd = new FormData()
       fd.append("file", scaled)
       const res = await uploadMediaAction(fd)
-      if (!res.ok) {
-        showToast(res.error, "error")
+      let nextUrl = res.ok ? res.data.url : ""
+      if (!nextUrl) {
+        nextUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
+          reader.onerror = () => resolve("")
+          reader.readAsDataURL(scaled)
+        })
+      }
+      if (!nextUrl) {
+        showToast(!res.ok ? res.error : "Could not save profile photo.", "error")
         return
       }
-      const { error } = await supabase.auth.updateUser({ data: { avatar_url: res.data.url } })
-      if (error) showToast(error.message, "error")
+      const { error } = await updateProfileMetadata({ avatar_url: nextUrl })
+      if (error) showToast(error, "error")
       else showToast("Profile photo updated.", "success")
     } finally {
       setUploading(false)
@@ -338,14 +269,13 @@ export function ProfileClient() {
     }
     setSavingAddress(true)
     try {
-      const { error } = await supabase.auth.updateUser({ data: { address: addressForm } })
+      const { error } = await updateProfileMetadata({ address: addressForm })
       if (error) {
-        showToast(error.message, "error")
+        showToast(error, "error")
         return
       }
       showToast("Delivery address saved.", "success", undefined, {
-        title: "Address saved!",
-        wave: true,
+        title: "Address saved",
       })
       setEditingAddress(false)
     } finally {
@@ -357,8 +287,8 @@ export function ProfileClient() {
     setLanguage(id)
     localStorage.setItem("locale", id)
     document.documentElement.lang = id
-    const { error } = await supabase.auth.updateUser({ data: { language: id } })
-    if (error) showToast(error.message, "error")
+    const { error } = await updateProfileMetadata({ language: id })
+    if (error) showToast(error, "error")
     else showToast("Language preference saved.", "success")
   }
 
@@ -402,9 +332,9 @@ export function ProfileClient() {
     ]
     setSavingCard(true)
     try {
-      const { error } = await supabase.auth.updateUser({ data: { payment_cards: next } })
+      const { error } = await updateProfileMetadata({ payment_cards: next })
       if (error) {
-        showToast(error.message, "error")
+        showToast(error, "error")
         return
       }
       setCards(next)
@@ -418,9 +348,9 @@ export function ProfileClient() {
 
   const removeCard = async (id: string) => {
     const next = cards.filter((c) => c.id !== id)
-    const { error } = await supabase.auth.updateUser({ data: { payment_cards: next } })
+    const { error } = await updateProfileMetadata({ payment_cards: next })
     if (error) {
-      showToast(error.message, "error")
+      showToast(error, "error")
       return
     }
     setCards(next)
@@ -429,120 +359,29 @@ export function ProfileClient() {
 
   return (
     <div className="relative w-full">
-      {/* The profile navigation lives in a hover flyout off the floating
-          profile icon (same interaction as the seller dashboard rail), so
-          the details section gets the full page width. */}
-      <div
-        className="fixed right-4 sm:right-6 top-24 z-40"
-            onMouseEnter={() => setMenuOpen(true)}
-            onMouseLeave={() => setMenuOpen(false)}
-          >
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Open profile menu"
-              aria-expanded={menuOpen}
-              className="w-12 h-12 rounded-full overflow-hidden bg-[#1c1c1e] dark:bg-white text-white dark:text-black border-2 border-white dark:border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.15)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-            >
-              {avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt=""
-                  width={48}
-                  height={48}
-                  unoptimized
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User className="w-5 h-5" aria-hidden />
-              )}
-            </button>
+      {/* The restored ProfileAccountMenu sidebar — the user's exact design,
+          shown beside the content (stacks on top on mobile). */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
+        <div className="w-full lg:w-80 shrink-0">
+          <ProfileAccountMenu
+            user={{
+              name: name || "Valued Customer",
+              email: email,
+              avatarUrl: avatarUrl,
+              role: "Verified Member",
+              language: language === "ar" ? "العربية" : language === "fr" ? "Français" : "English (US)",
+            }}
+            activeTab={activeTab as MenuTab}
+            ordersCount={orders.length}
+            favouritesCount={favouriteItems.length}
+            onTabSelect={(tab) => setActiveTab(tab)}
+            onLogout={handleLogout}
+            onAvatarChange={() => fileRef.current?.click()}
+          />
+        </div>
 
-            {menuOpen && (
-              // pt-3 bridges the gap so the mouse can travel from the icon
-              // into the panel without it closing.
-              <div className="absolute right-0 top-full pt-3">
-                <div className={`w-72 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${cardCls}`}>
-                  <div className="p-4 border-b border-gray-100 dark:border-white/10 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0">
-                      {avatarUrl ? (
-                        <Image
-                          src={avatarUrl}
-                          alt=""
-                          width={40}
-                          height={40}
-                          unoptimized
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-5 h-5 text-gray-400" aria-hidden />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-[#1c1c1e] dark:text-[var(--foreground)] truncate">
-                        {name || "Valued Customer"}
-                      </p>
-                      <p className="text-[11px] text-gray-400 truncate">{username || email}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-2 flex flex-col space-y-0.5">
-                    {navMenuItems.map((item) => {
-                      const Icon = item.icon
-                      const isActive = activeTab === item.id
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setActiveTab(item.id)}
-                          className={`w-full flex items-center justify-between py-2.5 px-3 rounded-xl transition-all text-left cursor-pointer group ${
-                            isActive
-                              ? "bg-[#1c1c1e] dark:bg-white text-white dark:text-black"
-                              : "text-[#374151] dark:text-neutral-300 hover:bg-gray-100/70 dark:hover:bg-white/5"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Icon className="w-4 h-4 stroke-[1.8]" />
-                            <span className={`text-sm ${isActive ? "font-semibold" : "font-normal"}`}>
-                              {item.label}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {item.count !== null && (
-                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${isActive ? "bg-white/20" : "bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-neutral-300"}`}>
-                                {item.count}
-                              </span>
-                            )}
-                            {item.detail && (
-                              <span className={`text-xs hidden sm:inline ${isActive ? "text-white/70 dark:text-black/60" : "text-gray-400"}`}>
-                                {item.detail}
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="p-2 border-t border-gray-100 dark:border-white/10">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-[#374151] dark:text-neutral-300 hover:text-[#eb483f] hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-left cursor-pointer group"
-                    >
-                      <LogOut className="w-4 h-4 stroke-[1.8]" />
-                      <span className="text-sm font-medium">Log out</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ================= Content (full width) ================= */}
-          <div className="min-w-0">
+          {/* ================= Content ================= */}
+          <div className="min-w-0 flex-1">
             {activeTab === "edit-profile" ? (
               <div className={`${cardCls} p-4 sm:p-5`}>
                 {/* Header */}
@@ -559,19 +398,13 @@ export function ProfileClient() {
                 <div className="flex flex-col items-center justify-center my-2">
                   <div className="relative">
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 dark:bg-white/10 ring-2 ring-black/5 shadow-sm flex items-center justify-center">
-                      {avatarUrl ? (
-                        <Image
-                          src={avatarUrl}
-                          alt={name || "Profile photo"}
-                          width={64}
-                          height={64}
-                          unoptimized
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-9 h-9 text-gray-400" aria-hidden />
-                      )}
+                      <UserAvatar
+                        src={avatarUrl}
+                        alt={name || "Profile photo"}
+                        email={email}
+                        size={64}
+                        sizeClass="w-16 h-16"
+                      />
                     </div>
                     <button
                       type="button"
@@ -695,214 +528,8 @@ export function ProfileClient() {
                 </div>
               </div>
             ) : activeTab === "orders" ? (
-              <div className="space-y-6">
-                <div className={`${cardCls} p-6`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-gray-100 dark:border-white/10">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-[var(--foreground)] rounded-xl">
-                        <ShoppingBag className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-[var(--foreground)]">My Orders & Tracking</h2>
-                        <p className="text-xs text-gray-500 dark:text-[var(--muted-foreground)]">
-                          Select any order to inspect live package logistics
-                        </p>
-                      </div>
-                    </div>
+              <OrdersTrackingDashboard orders={orders} />
 
-                    {/* Filter Pills */}
-                    <div className="flex items-center gap-1.5 p-1 bg-gray-100 dark:bg-white/5 rounded-xl text-xs font-medium">
-                      {(
-                        [
-                          { id: "all" as const, label: `All (${orders.length})` },
-                          { id: "in-transit" as const, label: `In Transit (${transitCount})` },
-                          { id: "delivered" as const, label: `Delivered (${deliveredCount})` },
-                        ]
-                      ).map((pill) => (
-                        <button
-                          key={pill.id}
-                          type="button"
-                          onClick={() => setOrdersFilter(pill.id)}
-                          className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                            ordersFilter === pill.id
-                              ? "bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-2xs font-semibold"
-                              : "text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
-                          }`}
-                        >
-                          {pill.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {visibleOrders.length === 0 || !selectedOrder ? (
-                    <div className="py-12 text-center">
-                      <Package className="w-10 h-10 text-gray-300 dark:text-neutral-600 mx-auto mb-3" aria-hidden />
-                      <p className="text-sm font-bold text-gray-900 dark:text-[var(--foreground)]">
-                        {orders.length === 0 ? "No orders yet" : "Nothing in this filter"}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-[var(--muted-foreground)] mt-1 mb-5">
-                        {orders.length === 0
-                          ? "Your orders and live tracking will appear here after checkout."
-                          : "Try a different filter."}
-                      </p>
-                      {orders.length === 0 && (
-                        <button
-                          type="button"
-                          onClick={() => router.push("/")}
-                          className="px-5 py-2.5 rounded-xl bg-[#eb483f] hover:bg-[#d93830] text-white text-xs font-bold transition-all cursor-pointer"
-                        >
-                          Start Shopping
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="pt-6 space-y-6">
-                      {/* Orders table — same style as the seller dashboard */}
-                      <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[40px] overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="text-[10px] uppercase tracking-widest opacity-40 font-black border-b border-[var(--border-color)]">
-                                <th className="px-8 py-5 text-left">ID</th>
-                                <th className="px-8 py-5 text-left">Items</th>
-                                <th className="px-8 py-5 text-left">Total</th>
-                                <th className="px-8 py-5 text-right">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[var(--border-color)]">
-                              {visibleOrders.map((order) => {
-                                const first = order.items[0]
-                                const count = order.items.reduce((n, i) => n + (i.quantity || 1), 0)
-                                const isSelected = selectedOrder?.id === order.id
-                                return (
-                                  <tr
-                                    key={order.id}
-                                    onClick={() => setSelectedOrderId(order.id)}
-                                    className={`transition-all cursor-pointer ${isSelected ? "bg-[var(--glass-bg)]" : "hover:bg-[var(--glass-bg)]"}`}
-                                  >
-                                    <td className="px-8 py-6 font-mono text-xs opacity-60">
-                                      #{shortOrderId(order.id)}
-                                    </td>
-                                    <td className="px-8 py-6">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full overflow-hidden bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center text-[10px] font-bold shrink-0">
-                                          {first?.image ? (
-                                            <Image src={first.image} alt={first.name} width={32} height={32} className="w-full h-full object-cover" />
-                                          ) : (
-                                            "?"
-                                          )}
-                                        </div>
-                                        <span className="text-xs font-semibold truncate max-w-56">
-                                          {first?.name ?? "Order"}
-                                          {order.items.length > 1 ? ` (+${order.items.length - 1})` : ""} · {count} item{count === 1 ? "" : "s"}
-                                        </span>
-                                      </div>
-                                    </td>
-                                    <td className="px-8 py-6 font-bold text-sm">${order.total.toFixed(2)}</td>
-                                    <td className="px-8 py-6 text-right">
-                                      <span className={`inline-block text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full ${getStatusStyle(order.status)}`}>
-                                        {order.status}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      {/* Live tracking for the selected order */}
-                      <div className="bg-[#fbfcfd] dark:bg-white/[0.03] rounded-2xl border border-gray-200/80 dark:border-white/10 p-5 sm:p-6">
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-white/10">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Package className="w-4 h-4 text-gray-500 shrink-0" />
-                            <span className="text-xs font-semibold text-gray-700 dark:text-neutral-300 truncate">
-                              {selectedOrder.carrier || "Standard"} &bull; {selectedTracking}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={copyTrackingNumber}
-                            className="p-1.5 rounded-lg bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer shrink-0"
-                            title="Copy tracking number"
-                            aria-label="Copy tracking number"
-                          >
-                            {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-4 pb-3">
-                          <div className="flex items-center gap-2.5">
-                            <Truck className="w-5 h-5 text-gray-800 dark:text-[var(--foreground)] stroke-[2.2]" />
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-[var(--foreground)] tracking-tight">Tracking</h3>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-500 dark:text-[var(--muted-foreground)]">
-                              Status :
-                            </span>
-                            <OrderStatusPill status={selectedOrder.status} large />
-                          </div>
-                        </div>
-
-                        {selectedCancelled && (
-                          <p className="mb-4 text-xs font-medium px-3.5 py-2.5 rounded-xl bg-rose-500/10 text-rose-600 border border-rose-500/20">
-                            This order was cancelled — no further tracking updates.
-                          </p>
-                        )}
-
-                        {/* Vertical Dashed Timeline */}
-                        <div className="relative pl-7 pt-4 space-y-5">
-                          <div className="absolute top-6 bottom-4 left-[11px] w-[1px] border-l-2 border-dashed border-gray-300 dark:border-white/15" />
-                          {TRACK_STAGES.map((stage, i) => {
-                            const done = !selectedCancelled && i < selectedIdx
-                            const active = !selectedCancelled && i === selectedIdx && selectedOrder.status !== "Delivered"
-                            const finished = !selectedCancelled && (i < selectedIdx || selectedOrder.status === "Delivered")
-                            const date =
-                              i === 0
-                                ? shortDate(selectedOrder.created_at)
-                                : active
-                                  ? shortDate(selectedOrder.status_updated_at)
-                                  : null
-                            return (
-                              <div key={stage.title} className="relative">
-                                <div className="absolute -left-[28px] top-1">
-                                  {done || finished ? (
-                                    <div className="w-3.5 h-3.5 rounded-full bg-[#fbb034] ring-4 ring-[#fbb034]/20" />
-                                  ) : active ? (
-                                    <div className="relative flex items-center justify-center">
-                                      <span className="absolute w-5 h-5 rounded-full bg-[#eb483f]/25 animate-ping" />
-                                      <div className="w-3.5 h-3.5 rounded-full bg-[#eb483f] ring-4 ring-[#eb483f]/30" />
-                                    </div>
-                                  ) : (
-                                    <div className="w-3.5 h-3.5 rounded-full bg-gray-400 dark:bg-neutral-600 ring-4 ring-gray-100 dark:ring-white/5" />
-                                  )}
-                                </div>
-                                <div>
-                                  <span className={`text-xs font-medium ${done || active || finished ? "text-gray-500 dark:text-neutral-400" : "text-gray-400 dark:text-neutral-600"}`}>
-                                    {stage.title}
-                                    {date ? ` (${date})` : ""}
-                                  </span>
-                                  <p className={`text-sm font-bold mt-0.5 ${done || active || finished ? "text-gray-900 dark:text-[var(--foreground)]" : "text-gray-400 dark:text-neutral-600"}`}>
-                                    {stage.subtitle}
-                                  </p>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Footer ETA Note */}
-                        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-white/10 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-[var(--muted-foreground)]">
-                          <span>ETA: {selectedOrder.status === "Delivered" ? shortDate(selectedOrder.status_updated_at) || selectedEta : selectedEta}</span>
-                          {destinationLine && <span className="truncate max-w-[200px]">{destinationLine}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
             ) : activeTab === "favourites" ? (
               <div className={`${cardCls} p-6 sm:p-8`}>
                 <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-100 dark:border-white/10">
@@ -1190,6 +817,7 @@ export function ProfileClient() {
               </div>
             )}
           </div>
+      </div>
     </div>
   )
 }

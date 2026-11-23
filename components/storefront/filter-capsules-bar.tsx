@@ -66,29 +66,34 @@ export const FilterCapsulesBar: React.FC<FilterCapsulesBarProps> = ({
           >
             {CATEGORIES.map((item) => {
               const isSelected = selectedCategory === item.id
+              const isAll = item.id === "all"
               return (
                 <button
                   key={item.id}
                   id={`capsule-filter-${item.id}`}
                   onClick={() => onSelectCategory(item.id)}
-                  className={`group flex-shrink-0 flex items-center gap-2.5 pl-1.5 pr-4 py-1.5 rounded-full transition-all duration-200 cursor-pointer select-none text-left border ${
+                  className={`group flex-shrink-0 flex items-center ${
+                    isAll ? "px-5 py-2 sm:py-2.5" : "gap-2.5 pl-1.5 pr-4 py-1.5"
+                  } rounded-full transition-all duration-200 cursor-pointer select-none text-left border ${
                     isSelected
                       ? "bg-black text-white border-black shadow-md ring-2 ring-black/20 scale-[1.02] dark:bg-white dark:text-black dark:border-white"
                       : "bg-white hover:bg-gray-50 text-gray-900 border-gray-200 shadow-2xs hover:shadow-xs hover:border-gray-300 dark:bg-white/5 dark:hover:bg-white/10 dark:text-neutral-200 dark:border-white/10 dark:hover:border-white/25"
                   }`}
                 >
-                  {/* Round Image Avatar Beside the Word */}
-                  <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-black/10 bg-gray-100">
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.name}
-                      fill
-                      sizes="32px"
-                      referrerPolicy="no-referrer"
-                      className="object-cover transition-transform duration-300 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-black/5 pointer-events-none" />
-                  </div>
+                  {/* Round Image Avatar Beside the Word (omitted for 'All') */}
+                  {!isAll && (
+                    <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-black/10 bg-gray-100">
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name}
+                        fill
+                        sizes="32px"
+                        referrerPolicy="no-referrer"
+                        className="object-cover transition-transform duration-300 group-hover:scale-110"
+                      />
+                      <div className="absolute inset-0 bg-black/5 pointer-events-none" />
+                    </div>
+                  )}
 
                   {/* Word label */}
                   <span

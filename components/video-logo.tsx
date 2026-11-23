@@ -47,7 +47,7 @@ export function VideoLogo({
         loop
         playsInline
         autoPlay
-        preload="auto"
+        preload="metadata"
         aria-hidden
         className={`${videoClassName} w-auto aspect-video object-cover transition-transform duration-500 ease-out group-hover:scale-105`}
       />

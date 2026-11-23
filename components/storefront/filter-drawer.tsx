@@ -106,10 +106,10 @@ export const FilterDrawer: React.FC<FilterDrawerProps> = ({
       {/* Dimmed backdrop */}
       <div onClick={handleCancel} className="absolute inset-0 bg-black/45 backdrop-blur-xs transition-opacity duration-300" />
 
-      {/* Bottom Sheet / Modal Container */}
+      {/* Bottom Sheet / Modal Container — Horizontal Layout */}
       <div
         id="search-filter-modal"
-        className="relative z-10 w-full max-w-[430px] bg-white rounded-t-[36px] sm:rounded-[36px] shadow-2xl p-6 sm:p-8 space-y-5 animate-in slide-in-from-bottom-8 duration-300"
+        className="relative z-10 w-full max-w-[760px] bg-white rounded-t-[36px] sm:rounded-[36px] shadow-2xl p-6 sm:p-7 space-y-4 animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto"
       >
         {/* Top Centered Drag Handle */}
         <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto" />
@@ -119,102 +119,108 @@ export const FilterDrawer: React.FC<FilterDrawerProps> = ({
           Search Filter
         </h2>
 
-        {/* Section 1: Category */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-bold text-[#1e293b] block">Category</label>
-          <div className="grid grid-cols-2 gap-2.5">
-            {categoryOptions.map((cat) => {
-              const isSelected = tempCategory === cat.id
-              return (
+        {/* Horizontal 2-Column Body */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-1">
+          {/* Left Column: Category */}
+          <div className="md:col-span-6 space-y-2.5">
+            <label className="text-sm font-bold text-[#1e293b] block">Category</label>
+            <div className="grid grid-cols-2 gap-2">
+              {categoryOptions.map((cat) => {
+                const isSelected = tempCategory === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setTempCategory(isSelected && cat.id !== "all" ? "all" : cat.id)}
+                    className={`py-2.5 px-3 rounded-2xl text-xs sm:text-[13px] font-semibold text-center transition-all cursor-pointer border ${
+                      isSelected
+                        ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
+                        : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Right Column: Price & Rating + Deals & Delivery */}
+          <div className="md:col-span-6 space-y-4">
+            {/* Section 2: Price & Rating Sorting */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-[#1e293b] block">Price & Rating</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 lg:grid-cols-4 gap-2">
+                {SORT_PRICE_OPTIONS.map((opt) => {
+                  const isSelected = selectedSort === opt.id
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedSort(opt.id)}
+                      className={`py-2 px-1 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
+                        isSelected
+                          ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
+                          : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Section 3: Marketplace Badges & Deals */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-[#1e293b] block">Deals & Delivery</label>
+              <div className="grid grid-cols-3 gap-2">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => setTempCategory(isSelected && cat.id !== "all" ? "all" : cat.id)}
-                  className={`py-3 px-4 rounded-2xl text-xs sm:text-[13px] font-semibold text-center transition-all cursor-pointer border ${
-                    isSelected
+                  onClick={() => setFreeShippingOnly(!freeShippingOnly)}
+                  className={`py-2 px-1 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
+                    freeShippingOnly
                       ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
                       : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
                   }`}
                 >
-                  {cat.label}
+                  Free Shipping
                 </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Section 2: Price & Rating Sorting */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-bold text-[#1e293b] block">Price & Rating</label>
-          <div className="grid grid-cols-4 gap-2">
-            {SORT_PRICE_OPTIONS.map((opt) => {
-              const isSelected = selectedSort === opt.id
-              return (
                 <button
-                  key={opt.id}
                   type="button"
-                  onClick={() => setSelectedSort(opt.id)}
-                  className={`py-2.5 px-1 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
-                    isSelected
+                  onClick={() => setDealsOnly(!dealsOnly)}
+                  className={`py-2 px-1 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
+                    dealsOnly
                       ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
                       : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
                   }`}
                 >
-                  {opt.label}
+                  On sale
                 </button>
-              )
-            })}
+                <button
+                  type="button"
+                  onClick={() => setTopOrdersOnly(!topOrdersOnly)}
+                  className={`py-2 px-1 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
+                    topOrdersOnly
+                      ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
+                      : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
+                  }`}
+                >
+                  1000+ Sold
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Section 3: Marketplace Badges & Deals */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-bold text-[#1e293b] block">Deals & Delivery</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setFreeShippingOnly(!freeShippingOnly)}
-              className={`py-2.5 px-2 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
-                freeShippingOnly
-                  ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
-                  : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
-              }`}
-            >
-              Free Shipping
-            </button>
-            <button
-              type="button"
-              onClick={() => setDealsOnly(!dealsOnly)}
-              className={`py-2.5 px-2 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
-                dealsOnly
-                  ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
-                  : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
-              }`}
-            >
-              On sale
-            </button>
-            <button
-              type="button"
-              onClick={() => setTopOrdersOnly(!topOrdersOnly)}
-              className={`py-2.5 px-2 rounded-2xl text-[11px] sm:text-xs font-semibold text-center transition-all cursor-pointer border truncate ${
-                topOrdersOnly
-                  ? "border-[#ff9b82] text-[#1e293b] bg-white ring-1 ring-[#ff9b82]"
-                  : "border-gray-200/90 text-[#334155] bg-white hover:border-gray-300"
-              }`}
-            >
-              1000+ Sold
-            </button>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="space-y-2.5 pt-1">
+        {/* Action Buttons — Horizontal Row */}
+        <div className="flex flex-row items-center gap-3 pt-3">
           {/* Apply Button */}
           <button
             id="btn-filter-apply"
             type="button"
             onClick={handleApply}
-            className="w-full py-3.5 rounded-2xl bg-[#ffb5a0] hover:bg-[#ffa38b] active:scale-98 text-[#1e293b] font-bold text-sm transition-all cursor-pointer shadow-xs"
+            className="flex-1 py-3 rounded-2xl bg-[#ffb5a0] hover:bg-[#ffa38b] active:scale-98 text-[#1e293b] font-bold text-sm transition-all cursor-pointer shadow-xs"
           >
             Apply
           </button>
@@ -224,7 +230,7 @@ export const FilterDrawer: React.FC<FilterDrawerProps> = ({
             id="btn-filter-cancel"
             type="button"
             onClick={handleCancel}
-            className="w-full py-3.5 rounded-2xl bg-white border border-[#1e293b] hover:bg-gray-50 active:scale-98 text-[#1e293b] font-bold text-sm transition-all cursor-pointer"
+            className="flex-1 py-3 rounded-2xl bg-white border border-[#1e293b] hover:bg-gray-50 active:scale-98 text-[#1e293b] font-bold text-sm transition-all cursor-pointer"
           >
             Cancel
           </button>

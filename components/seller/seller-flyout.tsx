@@ -1,25 +1,49 @@
 "use client"
 
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/seller/new-design/Sidebar"
 import { RailFlyoutPortal, useRailAnchoredFlyout } from "@/components/rail-flyout-portal"
 import { useSellerNav } from "@/contexts/providers/seller-nav-context"
 import { useThemeContext } from "@/contexts/providers/theme-context"
+import { useAuth } from "@/contexts/providers/auth-context"
 
 /**
- * Seller sidebar as a hover flyout — portaled to the body and anchored next
- * to the site rail, so it paints ABOVE the top nav and page content instead
- * of behind them (the old absolute-in-rail version was trapped in the rail's
- * z-30 stacking context). Opens on hover of the rail's Seller row; the rail
- * owns the delayed close (see components/sidebar.tsx) so the mouse can cross
- * the gap without the panel snapping shut.
+ * Seller sidebar flyout — opens on click of the rail's Seller button, aligned
+ * vertically with that button, and stays pinned until clicking outside or
+ * pressing Escape. Selecting any tab routes directly to `/seller` (or guides
+ * unauthenticated users straight to `/login?next=/seller`).
  */
 export function SellerFlyout() {
   const { flyoutOpen, setFlyoutOpen, sellerTab, setSellerTab } = useSellerNav()
   const { isDarkMode } = useThemeContext()
+  const { user } = useAuth()
   const router = useRouter()
 
   const position = useRailAnchoredFlyout(flyoutOpen)
+
+  useEffect(() => {
+    if (!flyoutOpen) return
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('[data-rail-flyout="seller"]')) return
+      if (target.closest("[data-seller-trigger]")) return
+      setFlyoutOpen(false)
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFlyoutOpen(false)
+    }
+
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [flyoutOpen, setFlyoutOpen])
 
   if (!flyoutOpen) return null
 
@@ -29,8 +53,6 @@ export function SellerFlyout() {
       top={position?.top ?? null}
       left={position?.left ?? null}
       label="seller"
-      onMouseEnter={() => setFlyoutOpen(true)}
-      onMouseLeave={() => setFlyoutOpen(false)}
     >
       <div className="block rounded-[22px] bg-[var(--popover)] shadow-[0_18px_60px_rgba(0,0,0,0.35)] ring-1 ring-[var(--border-color)] overflow-hidden animate-in fade-in slide-in-from-left-2 duration-150">
         <Sidebar
@@ -38,6 +60,10 @@ export function SellerFlyout() {
           onTabChange={(tab) => {
             setSellerTab(tab)
             setFlyoutOpen(false)
+            if (!user) {
+              router.push("/seller")
+              return
+            }
             router.push("/seller")
           }}
           isDarkMode={isDarkMode}

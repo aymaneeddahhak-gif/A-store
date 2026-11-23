@@ -1,14 +1,23 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import type { Product } from "@/lib/types"
 import { getProductMedia } from "@/lib/product-media"
 import { useCart } from "@/contexts/providers/cart-context"
 import { DetailGallery } from "@/components/product/detail-gallery"
 import { DetailPurchase } from "@/components/product/detail-purchase"
-import { DetailReviews } from "@/components/product/detail-reviews"
-import { SizeGuideModal } from "@/components/product/size-guide-modal"
+
+const DetailReviews = dynamic(
+  () => import("@/components/product/detail-reviews").then((m) => m.DetailReviews),
+  { ssr: false }
+)
+
+const SizeGuideModal = dynamic(
+  () => import("@/components/product/size-guide-modal").then((m) => m.SizeGuideModal),
+  { ssr: false }
+)
 
 /**
  * Detail experience — gallery + purchase column + full-width reviews.

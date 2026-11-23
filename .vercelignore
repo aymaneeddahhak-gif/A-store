@@ -1,0 +1,62 @@
+# Dependencies & build outputs
+node_modules
+.next
+out
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment files (configure in Vercel Project Settings instead)
+.env*
+
+# Git & CI
+.git
+.github
+.gitignore
+
+# Local agent / AI tooling
+.agents
+.claude
+.zcode
+.opencode
+.opencode.json
+opencode.json
+skills-lock.json
+
+# Local logs, debug scripts, and captures
+.freebuff
+.playwright-mcp
+.playwright-*.png
+.dev-log.txt
+.seed-debug-log.txt
+.ui-audit-log.txt
+.verify-nav.png
+home-top.png
+Cad.PNG
+check-*.mjs
+*.log
+*.log.err
+
+# Reference / design scratch folders
+newdesing
+newchckoutpagedesing
+newsellerdahbord
+detailscard
+
+# Tests, database SQL scripts, docs & formatter config
+tests
+playwright.config.ts
+playwright-report
+test-results
+sql
+README.md
+.editorconfig
+.prettierrc.json
+.prettierignore
+
+# Archives & OS files
+*.zip
+*.tar.gz
+*.rar
+.DS_Store
+Thumbs.db

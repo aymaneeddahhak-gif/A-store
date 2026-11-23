@@ -51,14 +51,14 @@ export function DealsPopup({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-label={`${title} ${percent} percent off`}
       onClick={onClose}
     >
       <div
-        className={`overflow-y-auto overflow-x-hidden relative w-full max-w-[min(28rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] rounded-2xl bg-gray-50 text-sky-400 flex flex-col justify-end items-center gap-2 py-5 px-4 shadow-2xl ${
+        className={`overflow-hidden relative w-full max-w-[min(28rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] rounded-2xl bg-gray-50 text-sky-400 flex flex-col justify-end items-center gap-1.5 py-4 px-4 shadow-2xl ${
           entered ? "animate-in zoom-in-95 fade-in duration-200" : "opacity-100"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -91,12 +91,12 @@ export function DealsPopup({
         </button>
 
         <div className="flex flex-col items-center">
-          <p className="text-2xl font-extrabold text-sky-500">{title}</p>
-          <p className="relative text-sm inline-block text-sky-400 after:absolute after:content-[''] after:ml-2 after:top-1/2 after:bg-sky-200 after:w-12 after:h-0.5 before:absolute before:content-[''] before:-ml-14 before:top-1/2 before:bg-sky-200 before:w-12 before:h-0.5">
+          <p className="text-xl sm:text-2xl font-extrabold text-sky-500">{title}</p>
+          <p className="relative text-[13px] sm:text-sm inline-block text-sky-400 after:absolute after:content-[''] after:ml-2 after:top-1/2 after:bg-sky-200 after:w-12 after:h-0.5 before:absolute before:content-[''] before:-ml-14 before:top-1/2 before:bg-sky-200 before:w-12 before:h-0.5">
             {subtitle}
           </p>
         </div>
-        <span className="font-extrabold text-6xl sm:text-8xl leading-none -skew-x-12 -skew-y-12 -mt-1 mb-1 text-sky-400">
+        <span className="font-extrabold text-5xl sm:text-7xl leading-none -skew-x-12 -skew-y-12 -mt-0.5 mb-0.5 text-sky-400">
           {percent}%
         </span>
         <Image
@@ -104,20 +104,16 @@ export function DealsPopup({
           alt="Discount mascot"
           width={480}
           height={480}
-          /* Mascot fills the card width (capped at 440px) but sits in a
-             fixed-height box, so a bigger photo no longer makes the card
-             taller — and fluid width means it never overflows on phones. */
-          className="h-[200px] w-full max-w-[440px] object-cover object-top rounded-xl -my-2 sm:h-[280px]"
-          priority
+          className="h-[160px] w-full max-w-[440px] object-cover object-top rounded-xl -my-1 sm:h-[220px]"
         />
         <button
           type="button"
           onClick={onShopNow}
-          className="z-10 px-6 py-3 bg-sky-400 text-gray-50 hover:bg-sky-300 active:scale-95 transition-all cursor-pointer font-bold text-base rounded-lg"
+          className="z-10 px-6 py-2.5 bg-sky-400 text-gray-50 hover:bg-sky-300 active:scale-95 transition-all cursor-pointer font-bold text-[15px] rounded-lg"
         >
           {buttonLabel}
         </button>
-        <p className="text-sm mb-1 font-bold tracking-widest text-sky-400">BIG SAVINGS</p>
+        <p className="text-[13px] mb-0.5 font-bold tracking-widest text-sky-400">BIG SAVINGS</p>
       </div>
     </div>
   )

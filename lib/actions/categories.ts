@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { isAdminEmail } from "@/lib/admin"
 import { CATEGORIES } from "@/lib/categories"
 import { LEGACY_CATEGORY } from "@/components/storefront/product-adapter"
+import { isSupabaseOffline } from "@/lib/supabase-circuit"
 
 const CATEGORIES_TABLE = "categories"
 const PRODUCTS_TABLE = "products"
@@ -20,18 +22,35 @@ export type CategoryActionResult<T = null> =
 
 const BUILTIN_IDS: Set<string> = new Set(CATEGORIES.map((c) => c.id))
 
-/** DB-defined categories (empty when the table is missing/empty). */
+const globalCategories = globalThis as unknown as {
+  __astoreFallbackCategories?: CategoryRow[]
+}
+
+function getFallbackCategories(): CategoryRow[] {
+  if (!globalCategories.__astoreFallbackCategories) {
+    globalCategories.__astoreFallbackCategories = []
+  }
+  return globalCategories.__astoreFallbackCategories
+}
+
+/** DB-defined categories (empty when offline or missing). */
 export async function listCategoriesAction(): Promise<CategoryActionResult<CategoryRow[]>> {
+  if (isSupabaseOffline()) {
+    return { ok: true, data: getFallbackCategories() }
+  }
   try {
     const supabase = await createSupabaseServerClient()
     const { data, error } = await supabase
       .from(CATEGORIES_TABLE)
       .select("id, label")
       .order("label", { ascending: true })
-    if (error) return { ok: false, error: error.message }
+    if (error) {
+      if (isSupabaseOffline()) return { ok: true, data: getFallbackCategories() }
+      return { ok: false, error: error.message }
+    }
     return { ok: true, data: (data ?? []) as CategoryRow[] }
   } catch {
-    return { ok: false, error: "Database connection failed." }
+    return { ok: true, data: getFallbackCategories() }
   }
 }
 
@@ -52,7 +71,7 @@ async function requireAdmin() {
   if (!auth?.user || !isAdminEmail(auth.user.email)) {
     return { ok: false as const, error: "Restricted to the store admin." }
   }
-  return { ok: true as const, supabase }
+  return { ok: true as const, db: createSupabaseAdminClient() ?? supabase }
 }
 
 function slugify(label: string): string {
@@ -77,7 +96,19 @@ export async function createCategoryAction(
     return { ok: false, error: "That category already exists." }
   }
 
-  const { data, error } = await gate.supabase
+  if (isSupabaseOffline()) {
+    const current = getFallbackCategories()
+    if (current.some((c) => c.id === id)) {
+      return { ok: false, error: "That category already exists." }
+    }
+    const row = { id, label: label.trim() }
+    globalCategories.__astoreFallbackCategories = [...current, row]
+    revalidatePath("/")
+    revalidatePath("/seller")
+    return { ok: true, data: row }
+  }
+
+  const { data, error } = await gate.db
     .from(CATEGORIES_TABLE)
     .insert([{ id, label: label.trim() }])
     .select()
@@ -100,7 +131,14 @@ export async function deleteCategoryAction(id: string): Promise<CategoryActionRe
     return { ok: false, error: "Built-in categories cannot be deleted." }
   }
 
-  const { count, error: countError } = await gate.supabase
+  if (isSupabaseOffline()) {
+    globalCategories.__astoreFallbackCategories = getFallbackCategories().filter((c) => c.id !== id)
+    revalidatePath("/")
+    revalidatePath("/seller")
+    return { ok: true, data: null }
+  }
+
+  const { count, error: countError } = await gate.db
     .from(PRODUCTS_TABLE)
     .select("id", { count: "exact", head: true })
     .eq("category", id)
@@ -112,7 +150,7 @@ export async function deleteCategoryAction(id: string): Promise<CategoryActionRe
     }
   }
 
-  const { error } = await gate.supabase.from(CATEGORIES_TABLE).delete().eq("id", id)
+  const { error } = await gate.db.from(CATEGORIES_TABLE).delete().eq("id", id)
   if (error) return { ok: false, error: error.message }
   revalidatePath("/")
   revalidatePath("/seller")

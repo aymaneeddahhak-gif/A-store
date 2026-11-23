@@ -11,6 +11,7 @@ import type { EcommerceProduct } from "@/lib/storefront/types"
 
 interface ProductCardProps {
   product: EcommerceProduct
+  priority?: boolean
   onToggleWishlist?: (id: string) => void
   onOpenProduct?: (id: string) => void
   onAddToCart?: (id: string) => void
@@ -18,6 +19,7 @@ interface ProductCardProps {
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
+  priority = false,
   onToggleWishlist,
   onOpenProduct,
   onAddToCart,
@@ -41,6 +43,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const reviewsCount = product.reviewsCount ?? 0
   const liked = product.isLiked ?? false
   const soldOut = (product.stock ?? 1) <= 0
+  const isPremium = Boolean(product.isPremium)
+  const heartPosClass = isPremium
+    ? discountPercent > 0
+      ? "top-4 right-[6.25rem] sm:right-[7.25rem]"
+      : "top-4 right-4"
+    : "top-4 left-4"
 
   const openProduct = () => onOpenProduct?.(product.id)
   const handleAddToCart = () => {
@@ -50,61 +58,86 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   }
 
   return (
-    <article className="group relative w-full max-w-sm sm:max-w-md bg-white rounded-3xl overflow-hidden border border-neutral-200 shadow-sm hover:shadow-xl transition-all duration-300 font-sans dark:bg-[var(--card)] dark:border-[var(--border-color)]">
-      {/* 1. Image Area with Floating Badges — a real Link with prefetch so
-          clicking through paints the detail page from an already-fetched
-          payload instead of waiting on a server render. */}
-      <Link
-        href={productHref}
-        prefetch={true}
-        className={`relative block w-full aspect-square bg-[#FAF7F2] overflow-hidden flex items-center justify-center dark:bg-white/5 ${
-          onOpenProduct ? "cursor-pointer" : ""
-        }`}
-        onClick={openProduct}
-        onPointerEnter={(e) => {
-          if (e.pointerType !== "mouse") return
-          setHovered(true)
-          router.prefetch(productHref)
-        }}
-        onPointerLeave={() => setHovered(false)}
-      >
-        <div className="w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out">
-          <CardMedia
-            image={product.imageUrl}
-            video={product.video ?? null}
-            alt={product.title}
-            active={hovered}
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          />
-        </div>
+    <article className="group relative w-full max-w-sm sm:max-w-md bg-white rounded-3xl overflow-visible border border-neutral-200 shadow-sm hover:shadow-xl transition-all duration-300 font-sans dark:bg-[var(--card)] dark:border-[var(--border-color)]">
+      {isPremium && <span aria-hidden className="premium-corner-ribbon" />}
 
-        {/* Circular Discount Badge (#F05423) */}
-        {discountPercent > 0 && (
-          <div
-            className="absolute top-4 right-4 z-10 flex flex-col items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#F05423] text-white text-center select-none"
-            style={{ boxShadow: "0 6px 18px rgba(240, 84, 35, 0.4)" }}
-          >
-            <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider leading-none mb-0.5">
-              UP TO
-            </span>
-            <span className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-none my-0.5">
-              {discountPercent}%
-            </span>
-            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none mt-0.5">
-              OFF
-            </span>
+      {/* 1. Image Area with Floating Badges — Classic Square Aspect Ratio */}
+      <div className="relative w-full aspect-square bg-[#FAF7F2] rounded-t-3xl overflow-hidden dark:bg-white/5">
+        <Link
+          href={productHref}
+          prefetch={true}
+          className={`relative block w-full h-full flex items-center justify-center ${
+            onOpenProduct ? "cursor-pointer" : ""
+          }`}
+          onClick={openProduct}
+          onPointerEnter={(e) => {
+            if (e.pointerType !== "mouse") return
+            setHovered(true)
+            router.prefetch(productHref)
+          }}
+          onPointerLeave={() => setHovered(false)}
+        >
+          <div className="w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out">
+            <CardMedia
+              image={product.imageUrl}
+              video={product.video ?? null}
+              alt={product.title}
+              active={hovered}
+              priority={priority}
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            />
           </div>
-        )}
 
-        {/* Wishlist Heart Button */}
+          {/* Circular Discount Badge (#F05423) */}
+          {discountPercent > 0 && (
+            <div
+              className="absolute top-4 right-4 z-10 flex flex-col items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#F05423] text-white text-center select-none"
+              style={{ boxShadow: "0 6px 18px rgba(240, 84, 35, 0.4)" }}
+            >
+              <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider leading-none mb-0.5">
+                UP TO
+              </span>
+              <span className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-none my-0.5">
+                {discountPercent}%
+              </span>
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none mt-0.5">
+                OFF
+              </span>
+            </div>
+          )}
+
+          {/* Bottom Tag Overlay */}
+          <div className="absolute bottom-3 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
+            {soldOut ? (
+              <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-neutral-900 text-white rounded-md shadow-xs">
+                SOLD OUT
+              </span>
+            ) : discountPercent > 0 ? (
+              <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-neutral-900/85 text-white rounded-md backdrop-blur-sm shadow-xs">
+                LIMITED TIME
+              </span>
+            ) : (
+              <span />
+            )}
+            {product.freeShipping && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-emerald-600 text-white rounded-md backdrop-blur-sm shadow-xs">
+                <Truck className="w-3 h-3" />
+                FREE SHIPPING
+              </span>
+            )}
+          </div>
+        </Link>
+
+        {/* Wishlist Heart Button — sibling outside <Link> for valid HTML & a11y */}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             onToggleWishlist?.(product.id)
           }}
-          aria-label="Add to wishlist"
-          className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center text-neutral-600 hover:text-red-500 hover:bg-white transition-colors cursor-pointer"
+          aria-label={liked ? `Remove ${product.title} from wishlist` : `Add ${product.title} to wishlist`}
+          aria-pressed={liked}
+          className={`absolute ${heartPosClass} z-20 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center text-neutral-600 hover:text-red-500 hover:bg-white transition-colors cursor-pointer`}
         >
           <Heart
             className={`w-4 h-4 transition-colors ${
@@ -112,31 +145,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             }`}
           />
         </button>
-
-        {/* Bottom Tag Overlay */}
-        <div className="absolute bottom-3 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
-          {soldOut ? (
-            <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-neutral-900 text-white rounded-md shadow-xs">
-              SOLD OUT
-            </span>
-          ) : discountPercent > 0 ? (
-            <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-neutral-900/85 text-white rounded-md backdrop-blur-sm shadow-xs">
-              LIMITED TIME
-            </span>
-          ) : (
-            <span />
-          )}
-          {product.freeShipping && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-emerald-600 text-white rounded-md backdrop-blur-sm shadow-xs">
-              <Truck className="w-3 h-3" />
-              FREE SHIPPING
-            </span>
-          )}
-        </div>
-      </Link>
+      </div>
 
       {/* 2. Product Details */}
-      <div className="p-5 sm:p-6 bg-white flex flex-col justify-between space-y-4 dark:bg-[var(--card)]">
+      <div className="p-5 sm:p-6 bg-white rounded-b-3xl flex flex-col justify-between space-y-3.5 dark:bg-[var(--card)]">
         <div>
           <div className="flex items-center justify-between text-xs text-neutral-400 mb-1 font-medium dark:text-[var(--muted-foreground)]">
             <span className="uppercase tracking-wider font-semibold">{categoryLabel}</span>
@@ -146,7 +158,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
 
           <h3
-            className={`text-lg sm:text-xl font-bold text-neutral-900 tracking-tight mb-2 dark:text-[var(--foreground)] ${
+            className={`text-lg sm:text-xl font-bold text-neutral-900 tracking-tight mb-1 dark:text-[var(--foreground)] ${
               onOpenProduct ? "cursor-pointer" : ""
             }`}
             onClick={openProduct}
@@ -154,7 +166,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {product.title}
           </h3>
 
-          <p className="text-xs sm:text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-4 dark:text-[var(--muted-foreground)]">
+          <p className="text-xs sm:text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-3 dark:text-[var(--muted-foreground)]">
             {product.subtitle}
           </p>
         </div>
@@ -207,17 +219,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <button
                 type="button"
                 onClick={openProduct}
-                data-tooltip={`Price: $${formatPrice(product.price)}`}
                 aria-label={`Shop ${product.title} now`}
-                className="group/shop relative w-[100px] h-[35px] bg-[#222] rounded-[0.45em] text-center cursor-pointer
-                  before:absolute before:content-[attr(data-tooltip)] before:w-[90px] before:h-[35px] before:bg-[#555] before:text-[0.9rem] before:text-white before:rounded before:leading-[35px] before:left-[calc(50%-45px)] before:bottom-[63px] before:opacity-0 before:invisible before:transition-all before:duration-500 hover:before:opacity-100 hover:before:visible hover:before:bottom-[53px]
-                  after:absolute after:content-[''] after:w-0 after:h-0 after:border-[10px] after:border-transparent after:border-t-[#555] after:left-[calc(50%-10px)] after:bottom-[calc(100%+8px)] after:opacity-0 after:invisible after:transition-all after:duration-500 hover:after:opacity-100 hover:after:visible hover:after:bottom-[33px]"
+                className="group/shop relative w-[100px] h-[35px] bg-[#222] dark:bg-white dark:text-black rounded-[0.45em] text-center cursor-pointer overflow-hidden transition-colors"
               >
                 <span className="absolute inset-0 overflow-hidden rounded-[0.45em]">
-                  <span className="absolute left-0 w-full h-full top-0 flex items-center justify-center text-[11px] font-bold tracking-wide text-white transition-[top] duration-500 group-hover/shop:top-[-100%]">
+                  <span className="absolute left-0 w-full h-full top-0 flex items-center justify-center text-[11px] font-bold tracking-wide text-white dark:text-black transition-[top] duration-500 group-hover/shop:top-[-100%]">
                     SHOP NOW
                   </span>
-                  <span className="absolute left-0 w-full h-full top-full flex items-center justify-center text-white transition-[top] duration-500 group-hover/shop:top-0">
+                  <span className="absolute left-0 w-full h-full top-full flex items-center justify-center text-white dark:text-black transition-[top] duration-500 group-hover/shop:top-0">
                     <ShoppingCart className="w-4 h-4" />
                   </span>
                 </span>

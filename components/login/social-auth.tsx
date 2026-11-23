@@ -12,7 +12,7 @@ export function SocialAuth({
       type="button"
       onClick={onGoogleLogin}
       disabled={isGoogleLoading}
-      className="w-full flex items-center justify-center gap-3 h-[50px] bg-[var(--background)] text-[var(--foreground)] rounded-[10px] font-bold text-xs uppercase tracking-wider hover:bg-[var(--glass-bg)] active:scale-[0.99] transition-all border border-[#ededef] dark:border-[var(--border-color)] shadow-sm disabled:opacity-70 cursor-pointer"
+      className="w-full flex items-center justify-center gap-2.5 h-[40px] bg-[var(--background)] text-[var(--foreground)] rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-[var(--glass-bg)] active:scale-[0.99] transition-all border border-[#ededef] dark:border-[var(--border-color)] shadow-sm disabled:opacity-70 cursor-pointer"
     >
       {isGoogleLoading ? (
         <Loader2 size={16} className="animate-spin text-gray-500" />

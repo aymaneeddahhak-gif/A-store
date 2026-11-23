@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createClient } from "@supabase/supabase-js"
+import { createResilientFetch } from "@/lib/supabase-circuit"
 
 /**
  * Service-role client for admin-only work (listing/managing auth users).
@@ -14,5 +15,6 @@ export function createSupabaseAdminClient() {
   if (!url || !serviceRoleKey) return null
   return createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: createResilientFetch({ noStore: true }) },
   })
 }

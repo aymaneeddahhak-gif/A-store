@@ -1,7 +1,7 @@
 "use client"
 
 import React from 'react';
-import { Check, Save, ArrowLeft } from 'lucide-react';
+import { Check, Save, ArrowLeft, Sparkles } from 'lucide-react';
 
 interface PageHeaderProps {
   isEditMode?: boolean;
@@ -9,6 +9,8 @@ interface PageHeaderProps {
   onSaveDraft: () => void;
   onAddProduct: () => void;
   isSubmitting?: boolean;
+  /** One-click demo data fill (Add mode only). */
+  onFillDemo?: () => void;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -17,6 +19,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   onSaveDraft,
   onAddProduct,
   isSubmitting = false,
+  onFillDemo,
 }) => {
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -29,6 +32,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         <h2 className="text-xl font-bold tracking-tight text-gray-900">{isEditMode ? 'Edit Product' : 'Add New Product'}</h2>
       </div>
       <div className="flex items-center gap-3">
+        {onFillDemo && !isEditMode && (
+          <button type="button" onClick={onFillDemo} className="h-10 px-5 rounded-xl border bg-white border-gray-300/80 text-gray-700 hover:bg-gray-50 flex items-center gap-2 text-sm font-medium cursor-pointer" title="Fill every field with sample data so you can try the flow instantly">
+            <Sparkles className="w-4 h-4" /><span>Fill demo product</span>
+          </button>
+        )}
         <button type="button" onClick={onSaveDraft} className="h-10 px-5 rounded-xl border bg-white border-gray-300/80 text-gray-700 hover:bg-[#98e4af] hover:text-gray-950 hover:border-[#98e4af] flex items-center gap-2 text-sm font-medium cursor-pointer">
           <Save className="w-4 h-4" /><span>Save Draft</span>
         </button>

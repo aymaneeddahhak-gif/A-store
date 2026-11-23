@@ -370,9 +370,12 @@ export function DetailReviews({
                           key={idx}
                           className="relative w-14 h-14 rounded-xl overflow-hidden border border-neutral-200 dark:border-white/10 group shrink-0 bg-[#f4f3f0] dark:bg-white/5"
                         >
-                          <img
+                          <Image
                             src={photo}
                             alt={`Review photo ${idx + 1}`}
+                            width={56}
+                            height={56}
+                            unoptimized
                             className="w-full h-full object-cover"
                           />
                           <button
@@ -469,11 +472,13 @@ export function DetailReviews({
                               className="w-16 h-16 rounded-xl overflow-hidden border border-neutral-200/80 dark:border-white/10 bg-neutral-100 dark:bg-white/5 shrink-0 cursor-pointer hover:opacity-90 hover:scale-[1.03] transition-all shadow-2xs"
                               title="Click to view image"
                             >
-                              <img
+                              <Image
                                 src={pic}
                                 alt={`${rev.user} review photo ${pIdx + 1}`}
+                                width={64}
+                                height={64}
+                                unoptimized
                                 className="w-full h-full object-cover"
-                                loading="lazy"
                               />
                             </button>
                           ))}
@@ -561,9 +566,12 @@ export function DetailReviews({
             >
               <X className="w-4 h-4" />
             </button>
-            <img
+            <Image
               src={enlargedPhoto}
               alt="Review attachment enlarged"
+              width={800}
+              height={600}
+              unoptimized
               className="w-full h-auto max-h-[78vh] object-contain rounded-xl"
             />
           </div>

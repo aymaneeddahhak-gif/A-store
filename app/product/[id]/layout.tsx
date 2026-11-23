@@ -15,9 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   return {
-    // Tab title stays "A-store" on every product page; the product itself is
-    // described in the description and link previews instead.
-    title: { absolute: "A-store" },
+    title: product.name,
     description: product.description ?? `Shop ${product.name} at A-store.`,
     openGraph: {
       title: product.name,

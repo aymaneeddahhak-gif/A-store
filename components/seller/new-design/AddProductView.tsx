@@ -4,7 +4,7 @@ import { useState } from "react"
 import { GeneralInfoCard } from "./GeneralInfoCard"
 import { PricingStockCard } from "./PricingStockCard"
 import { UploadImageCard } from "./UploadImageCard"
-import { CategoryCard } from "./CategoryCard"
+import { CategoryCard, type CategoryOption } from "./CategoryCard"
 import { PageHeader } from "./PageHeader"
 import type { ColorOption, ProductItem } from "./types"
 import { toProductPayload } from "./mapping"
@@ -37,12 +37,14 @@ const DEFAULT_COLORS: ColorOption[] = [
 export function AddProductView({
   initial,
   categories,
+  onAddCategory,
   onBack,
   onSaved,
   onToast,
 }: {
   initial?: ProductItem | null
-  categories: string[]
+  categories: CategoryOption[]
+  onAddCategory?: (label: string) => Promise<{ ok: boolean; error?: string }>
   onBack: () => void
   onSaved: (payload: ReturnType<typeof toProductPayload>, editingId: string | null) => Promise<boolean>
   onToast: (msg: string) => void
@@ -62,9 +64,9 @@ export function AddProductView({
   const [discount, setDiscount] = useState(initial?.discount ?? "0%")
   const [discountType, setDiscountType] = useState(initial?.discountType ?? "Member Exclusive")
   const [stockStatus, setStockStatus] = useState<ProductItem["status"]>(initial?.status ?? "In Stock")
-  const [category, setCategory] = useState(initial?.category ?? categories[0] ?? "")
-  const [localCategories, setLocalCategories] = useState<string[]>(categories)
+  const [category, setCategory] = useState(initial?.category ?? categories[0]?.id ?? "")
   const [images, setImages] = useState<string[]>(initial?.images ?? [])
+  const [video, setVideo] = useState<string>(initial?.video ?? "")
   const [activeImage, setActiveImage] = useState(0)
   const [busy, setBusy] = useState(false)
 
@@ -89,7 +91,8 @@ export function AddProductView({
       for (let i = 0; i < images.length; i++) {
         const src = images[i]
         if (src.startsWith("data:")) {
-          const file = dataUrlToFile(src, `product-${Date.now()}-${i}.png`)
+          const isVid = src.startsWith("data:video")
+          const file = dataUrlToFile(src, `product-${Date.now()}-${i}.${isVid ? "mp4" : "png"}`)
           if (!file) continue
           const fd = new FormData()
           fd.append("file", file)
@@ -104,6 +107,22 @@ export function AddProductView({
         onToast("Image upload failed — product not saved")
         return
       }
+      // Showcase video: upload the local blob, keep remote URLs as-is.
+      let finalVideo = ""
+      if (video) {
+        if (video.startsWith("data:")) {
+          const file = dataUrlToFile(video, `product-video-${Date.now()}.mp4`)
+          if (file) {
+            const fd = new FormData()
+            fd.append("file", file)
+            const res = await uploadMediaAction(fd)
+            if (res.ok) finalVideo = res.data.url
+            else onToast(res.error)
+          }
+        } else {
+          finalVideo = video
+        }
+      }
       const payload = toProductPayload({
         name,
         basePrice,
@@ -116,11 +135,38 @@ export function AddProductView({
         selectedColors,
         availableColors,
       })
+      if (finalVideo) payload.video = finalVideo
       const ok = await onSaved(payload, initial?.id ?? null)
       if (ok) onBack()
     } finally {
       setBusy(false)
     }
+  }
+
+  /** One click fills every field with sample data (images + video included)
+      so the whole CRUD flow can be tried instantly in the portfolio demo. */
+  const fillDemo = () => {
+    setName("Aura Wireless Headphones")
+    setDescription(
+      "Studio-grade 40mm drivers with adaptive noise cancelling, 40-hour battery life and a featherlight aluminum headband. USB-C fast charge gives 6 hours of playback in 10 minutes."
+    )
+    setBasePrice("129.99")
+    setStock("24")
+    setDiscount("20%")
+    setCategory(categories.some((c) => c.id === "phones") ? "phones" : categories[0]?.id ?? "")
+    setProductType("Audio")
+    setSku("SKU-DEMO-001")
+    setSelectedSizes(["One Size"])
+    if (!availableSizes.includes("One Size")) setAvailableSizes((p) => [...p, "One Size"])
+    setSelectedColors(["Black", "Silver"])
+    setImages([
+      "/images/product/airpods.png",
+      "/images/product/iphone-17.png",
+      "/videos/product/earpodsvideos.mp4",
+    ])
+    setVideo("/videos/product/earpodsvideos.mp4")
+    setActiveImage(0)
+    onToast("Demo product filled — review and press Add Product.")
   }
 
   return (
@@ -131,6 +177,7 @@ export function AddProductView({
         onSaveDraft={() => onToast("Draft saved locally — publish via Add Product")}
         onAddProduct={handleSave}
         isSubmitting={busy}
+        onFillDemo={fillDemo}
       />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-7 space-y-6">
@@ -178,12 +225,19 @@ export function AddProductView({
                 return [...p, url]
               })
             }}
+            video={video}
+            onAddVideo={(url) => setVideo(url)}
+            onRemoveVideo={() => setVideo("")}
           />
           <CategoryCard
             category={category}
             onCategoryChange={setCategory}
-            categories={localCategories}
-            onAddCategory={(c) => setLocalCategories((p) => (p.includes(c) ? p : [...p, c]))}
+            categories={categories}
+            onAddCategory={(c) => {
+              void Promise.resolve(onAddCategory?.(c)).then((res) => {
+                if (res && !res.ok) onToast(res.error ?? "Could not add the category.")
+              })
+            }}
           />
         </div>
       </div>

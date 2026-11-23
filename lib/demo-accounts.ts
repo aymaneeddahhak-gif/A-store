@@ -1,12 +1,10 @@
 /**
- * Portfolio demo accounts — real Supabase users, one click to sign in.
+ * Public One-Click portfolio demo accounts shown on `/login`.
  *
- * Admin manages the catalog; Tester explores the same seller dashboard
- * (the app has no separate roles — both logins open every seller tool).
- * Credentials live here so the login page can sign in directly; they are
- * low-privilege demo logins and RLS still applies to everything they do.
+ * Official admin (`admin@a-store.shop`) is intentionally excluded from `/login`
+ * and stays private behind direct email/password credentials.
  */
-export type DemoAccountId = "admin" | "tester"
+export type DemoAccountId = "demo_seller" | "customer" | "demo_admin"
 
 export interface DemoAccount {
   id: DemoAccountId
@@ -18,20 +16,17 @@ export interface DemoAccount {
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
   {
-    id: "admin",
-    label: "Continue as Admin",
-    description: "Manage products, orders & reviews",
-    email: "admin@a-store.shop",
-    // SECURITY: the admin password is NOT in the source (it used to be, which
-    // handed every repo visitor full admin access). It lives in the server's
-    // ADMIN_DEMO_PASSWORD env var and signs in through demoAdminLoginAction.
+    id: "demo_seller",
+    label: "Demo Seller",
+    description: "Explore Seller Console, manage products & orders",
+    email: "seller@a-store.shop",
     password: "",
   },
   {
-    id: "tester",
-    label: "Continue as Tester",
-    description: "Explore the seller dashboard",
-    email: "tester@a-store.shop",
-    password: "Astore-Test-2026!",
+    id: "customer",
+    label: "Normal User",
+    description: "Shop, place orders & manage profile",
+    email: "customer@a-store.shop",
+    password: "Astore-Customer-2026!",
   },
 ]

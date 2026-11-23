@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
-import { MessageCircle, X, Send, Bot, User, Sparkles, ShoppingBag, Mic, Volume2, VolumeX } from "lucide-react"
+import { MessageCircle, X, Send, Bot, User, ShoppingBag, Mic, Volume2, VolumeX } from "lucide-react"
 import type { Product } from "@/lib/types"
 import { useCatalog } from "@/contexts/providers/catalog-context"
 import { useToast } from "@/contexts/toast-context"
@@ -256,7 +256,7 @@ export default function Chatbot() {
                     <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--card)]/50 backdrop-blur-sm">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center">
-                                <Sparkles size={18} fill="currentColor" />
+                                <Bot size={18} />
                             </div>
                             <div>
                                 <h3 className="font-black text-[var(--foreground)] leading-none">Shop Guide</h3>

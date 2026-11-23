@@ -18,6 +18,7 @@ yarn-error.log*
 
 # env files
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -72,3 +73,7 @@ Cad.PNG
 check-*.mjs
 *.log
 *.log.err
+
+# Playwright test artifacts
+playwright-report/
+test-results/

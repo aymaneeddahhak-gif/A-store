@@ -19,12 +19,14 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [isDarkMode, setIsDarkMode] = useState(true)
+  // Light is the official default — dark mode applies only when the user
+  // explicitly picked it (persisted "dark" in localStorage).
+  const [isDarkMode, setIsDarkMode] = useState(false)
   const [hydrated, setHydrated] = useState(false)
 
   // Adopt whatever the pre-paint script already applied.
   useEffect(() => {
-    setIsDarkMode(readThemeFromStorage() !== "light")
+    setIsDarkMode(readThemeFromStorage() === "dark")
     setHydrated(true)
   }, [])
 

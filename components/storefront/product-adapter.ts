@@ -101,15 +101,24 @@ export function toStorefrontProduct(product: Product, isLiked: boolean): Ecommer
   // Offers are merchant-controlled: only rows with a valid original_price
   // carry a compare-at price and discount badge. No fallback derivation —
   // without a stored offer there is no discount, period.
+  const lowerName = product.name.toLowerCase()
+  const isRealMadridKit = product.id === 2 || lowerName.includes("real madrid")
+  const isPremium =
+    isRealMadridKit ||
+    product.id === 5 ||
+    lowerName.includes("iphone 17 pro max") ||
+    product.id === 7 ||
+    lowerName.includes("varsity urban")
+
   const ordersCount = product.sold_count ?? Math.max(1, product.likes) * 25
   const freeShipping = product.price >= 50
   const badge = product.likes >= 80 ? "SuperDeal" : undefined
   const originalPrice =
-    product.original_price && product.original_price > product.price
+    !isRealMadridKit && product.original_price && product.original_price > product.price
       ? product.original_price
       : undefined
   const discountPercent =
-    originalPrice && originalPrice > product.price
+    !isRealMadridKit && originalPrice && originalPrice > product.price
       ? Math.round((1 - product.price / originalPrice) * 100)
       : undefined
 
@@ -128,6 +137,7 @@ export function toStorefrontProduct(product: Product, isLiked: boolean): Ecommer
     rating: product.rating,
     reviewsCount: product.reviews?.length ?? 0,
     badge,
+    isPremium,
     stock: product.stock,
     specs,
     colors,

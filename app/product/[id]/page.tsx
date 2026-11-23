@@ -6,6 +6,7 @@ import { DetailExperience } from "@/components/product/detail-experience"
 import { toStorefrontProduct } from "@/components/storefront/product-adapter"
 import { CATEGORIES } from "@/lib/categories"
 import { getProductById, getRelatedProducts } from "@/lib/queries/products"
+import { SITE_URL } from "@/lib/site"
 
 type Props = {
   params: Promise<{ id: string }>
@@ -30,8 +31,39 @@ export default async function ProductDetailPage({ params, searchParams }: Props)
   const categoryLabel =
     CATEGORIES.find((c) => c.id === storefront.category)?.label ?? product.category
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description ?? `Shop ${product.name} at A-store.`,
+    image: product.image.startsWith("http") ? product.image : `${SITE_URL}${product.image}`,
+    offers: {
+      "@type": "Offer",
+      url: `${SITE_URL}/product/${product.id}`,
+      priceCurrency: "USD",
+      price: product.price,
+      availability:
+        (product.stock ?? 1) > 0
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+    },
+    ...(product.reviews && product.reviews.length > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: product.rating || 5,
+            reviewCount: product.reviews.length,
+          },
+        }
+      : {}),
+  }
+
   return (
     <div className="w-full selection:bg-[var(--foreground)] selection:text-[var(--background)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="mx-auto w-full p-3 sm:p-6 md:p-8">
         {/* Centered canvas card */}
         <div className="w-full rounded-[26px] border border-[var(--border-color)] bg-[var(--card)] p-5 shadow-xl shadow-black/5 sm:p-7 md:rounded-[32px] md:p-9 dark:shadow-black/30">
