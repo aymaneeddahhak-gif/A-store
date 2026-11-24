@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 
 interface DealsPopupProps {
@@ -31,6 +32,10 @@ export function DealsPopup({
   // final layout but without the transient entrance styles, so it never
   // shows a different shape/height before settling into place.
   const [entered, setEntered] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   useEffect(() => {
     if (!open || entered) return
     const raf = requestAnimationFrame(() => setEntered(true))
@@ -47,18 +52,18 @@ export function DealsPopup({
     return () => document.removeEventListener("keydown", onKey)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[180] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-label={`${title} ${percent} percent off`}
       onClick={onClose}
     >
       <div
-        className={`overflow-hidden relative w-full max-w-[min(28rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] rounded-2xl bg-gray-50 text-sky-400 flex flex-col justify-end items-center gap-1.5 py-4 px-4 shadow-2xl ${
+        className={`overflow-hidden relative w-full max-w-[min(28rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] rounded-2xl bg-white text-sky-400 flex flex-col justify-end items-center gap-1.5 py-4 px-4 shadow-2xl ${
           entered ? "animate-in zoom-in-95 fade-in duration-200" : "opacity-100"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -99,13 +104,15 @@ export function DealsPopup({
         <span className="font-extrabold text-5xl sm:text-7xl leading-none -skew-x-12 -skew-y-12 -mt-0.5 mb-0.5 text-sky-400">
           {percent}%
         </span>
-        <Image
-          src="/images/discount/discount.jpeg"
-          alt="Discount mascot"
-          width={480}
-          height={480}
-          className="h-[160px] w-full max-w-[440px] object-cover object-top rounded-xl -my-1 sm:h-[220px]"
-        />
+        <div className="w-full max-w-[440px] rounded-xl bg-white overflow-hidden -my-1 flex items-center justify-center">
+          <Image
+            src="/images/discount/discount-white.png"
+            alt="Discount mascot"
+            width={480}
+            height={270}
+            className="h-[160px] w-full object-contain object-center bg-white sm:h-[210px]"
+          />
+        </div>
         <button
           type="button"
           onClick={onShopNow}
@@ -115,6 +122,7 @@ export function DealsPopup({
         </button>
         <p className="text-[13px] mb-0.5 font-bold tracking-widest text-sky-400">BIG SAVINGS</p>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -62,41 +62,151 @@ const SPECS_BY_CATEGORY: Record<string, [ProductSpec, ProductSpec, ProductSpec]>
   ],
 }
 
-const COLORS_BY_CATEGORY: Record<string, { name: string; hex: string }[]> = {
+const COLORS_BY_CATEGORY: Record<string, { name: string; hex: string; image?: string }[]> = {
   phones: [
     { name: "Desert Titanium", hex: "#cbb69d" },
-    { name: "Natural Titanium", hex: "#9e978e" },
     { name: "Black Titanium", hex: "#2b2b2d" },
   ],
   gaming: [
-    { name: "Silver", hex: "#d4d4d8" },
-    { name: "Midnight Blue", hex: "#1e293b" },
+    { name: "Pearl White", hex: "#e4e4e7" },
     { name: "Matte Black", hex: "#18181b" },
   ],
   sneakers: [
-    { name: "Cyan Blue", hex: "#00b4d8" },
-    { name: "Lavender", hex: "#b5a6c9" },
-    { name: "Midnight Navy", hex: "#1d3557" },
+    { name: "Cloud White", hex: "#f4f4f5" },
+    { name: "Midnight Black", hex: "#1e293b" },
   ],
   clothes: [
     { name: "Midnight", hex: "#1d3557" },
     { name: "Stone", hex: "#a8a29e" },
-    { name: "Ivory", hex: "#f1f5f9" },
   ],
   food: [
-    { name: "Golden", hex: "#d4af37" },
-    { name: "Cocoa", hex: "#78350f" },
+    { name: "Golden Butter", hex: "#d4af37" },
+    { name: "Dark Cocoa", hex: "#4a2c1d" },
   ],
+}
+
+export interface ProductVariantConfig {
+  colors: { name: string; hex: string; image?: string }[]
+  variantLabel: string
+  variantOptions: string[]
+}
+
+/**
+ * Per-product color + type configuration keyed by primary image filename so
+ * both live Supabase rows and offline fallback rows get tailored swatches,
+ * real color-variant photos, and product-appropriate type/size options.
+ */
+const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
+  "airpods.png": {
+    colors: [
+      { name: "Pearl White", hex: "#e4e4e7", image: "/images/product/airpods.png" },
+      { name: "Matte Black", hex: "#1f232b", image: "/images/product/variants/airpods-dark.png" },
+    ],
+    variantLabel: "Edition",
+    variantOptions: ["Standard ANC", "Studio Pro"],
+  },
+  "RMADRIDKIT.png": {
+    colors: [
+      { name: "Home White", hex: "#f3f4f6", image: "/images/product/RMADRIDKIT.png" },
+      { name: "Away Obsidian", hex: "#1e293b", image: "/images/product/variants/RMADRIDKIT-dark.png" },
+    ],
+    variantLabel: "Size",
+    variantOptions: ["S", "M", "L", "XL", "XXL"],
+  },
+  "sneakers.png": {
+    colors: [
+      { name: "Cloud White", hex: "#f4f4f5", image: "/images/product/sneakers.png" },
+      { name: "Midnight Black", hex: "#272d38", image: "/images/product/variants/sneakers-dark.png" },
+    ],
+    variantLabel: "Size",
+    variantOptions: ["40.5", "41", "42", "43", "44", "45"],
+  },
+  "Croisant.png": {
+    colors: [
+      { name: "Golden Butter", hex: "#d4883a", image: "/images/product/Croisant.png" },
+      { name: "Dark Cocoa", hex: "#4a2614", image: "/images/product/variants/Croisant-choco.png" },
+    ],
+    variantLabel: "Pack",
+    variantOptions: ["Single", "Box of 4", "Box of 8"],
+  },
+  "iphone-17.png": {
+    colors: [
+      { name: "Cosmic Orange", hex: "#e57034", image: "/images/product/iphone-17.png" },
+      { name: "Black Titanium", hex: "#26282c", image: "/images/product/variants/iphone-17-black.png" },
+    ],
+    variantLabel: "Storage",
+    variantOptions: ["256GB", "512GB", "1TB"],
+  },
+  "bluejacket.png": {
+    colors: [
+      { name: "Cobalt Blue", hex: "#0b75b8", image: "/images/product/bluejacket.png" },
+      { name: "Obsidian Charcoal", hex: "#26292e", image: "/images/product/variants/bluejacket-dark.png" },
+    ],
+    variantLabel: "Size",
+    variantOptions: ["S", "M", "L", "XL"],
+  },
+  "S-kacket.png": {
+    colors: [
+      { name: "Camel Gold", hex: "#b88a4a", image: "/images/product/S-kacket.png" },
+      { name: "Crimson Red", hex: "#9b1c24", image: "/images/product/variants/S-kacket-crimson.png" },
+    ],
+    variantLabel: "Size",
+    variantOptions: ["S", "M", "L", "XL"],
+  },
+  "laptop.png": {
+    colors: [
+      { name: "Space Gray", hex: "#4b5563", image: "/images/product/laptop.png" },
+      { name: "Silver Titanium", hex: "#cbd5e1", image: "/images/product/variants/laptop-silver.png" },
+    ],
+    variantLabel: "Memory / SSD",
+    variantOptions: ["16GB · 512GB", "32GB · 1TB", "64GB · 2TB"],
+  },
+  "umbrella.png": {
+    colors: [
+      { name: "Crimson Red", hex: "#e63946", image: "/images/product/umbrella.png" },
+      { name: "Midnight Black", hex: "#1f242d", image: "/images/product/variants/umbrella-black.png" },
+    ],
+    variantLabel: "Canopy",
+    variantOptions: ['Compact 42"', 'Full 48"'],
+  },
+  "weddg.png": {
+    colors: [
+      { name: "Ivory Lace", hex: "#f4efe6", image: "/images/product/weddg.png" },
+      { name: "Rose Blush", hex: "#e8b4be", image: "/images/product/variants/weddg-blush.png" },
+    ],
+    variantLabel: "Size",
+    variantOptions: ["XS", "S", "M", "L", "XL"],
+  },
+}
+
+export function getProductVariantConfig(product: Product): ProductVariantConfig {
+  const category = storefrontCategory(product)
+  const basename = product.image.split("/").pop() ?? ""
+  const preset = VARIANT_CONFIG_BY_IMAGE[basename]
+
+  const colors =
+    product.custom_colors && product.custom_colors.length > 0
+      ? product.custom_colors.map((c, idx) => ({
+          name: c.name,
+          hex: c.hex,
+          image: c.image ?? product.images?.[idx] ?? (idx === 0 ? product.image : undefined),
+        }))
+      : preset?.colors ?? (COLORS_BY_CATEGORY[category] ?? COLORS_BY_CATEGORY.clothes)
+
+  const variantOptions =
+    product.custom_sizes && product.custom_sizes.length > 0
+      ? product.custom_sizes
+      : preset?.variantOptions ?? []
+
+  const variantLabel = preset?.variantLabel ?? (category === "sneakers" ? "Size" : "Option")
+
+  return { colors, variantLabel, variantOptions }
 }
 
 export function toStorefrontProduct(product: Product, isLiked: boolean): EcommerceProduct {
   const category = storefrontCategory(product)
   const specs = SPECS_BY_CATEGORY[category] ?? SPECS_BY_CATEGORY.clothes
-  // Seller-defined swatches win; otherwise the category defaults apply.
-  const colors =
-    product.custom_colors && product.custom_colors.length > 0
-      ? product.custom_colors.map((c) => ({ name: c.name, hex: c.hex }))
-      : (COLORS_BY_CATEGORY[category] ?? COLORS_BY_CATEGORY.clothes)
+  const { colors } = getProductVariantConfig(product)
 
   // Offers are merchant-controlled: only rows with a valid original_price
   // carry a compare-at price and discount badge. No fallback derivation —
@@ -150,6 +260,36 @@ export function formatPrice(value: number): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)
 }
 
+/** Clean transparent floating cutouts used by the editorial HeroShowcase. */
+const HERO_CUTOUT_BY_IMAGE: Record<string, string> = {
+  "airpods.png": "/images/product/cutouts/airpods.png",
+  "bluejacket.png": "/images/product/cutouts/bluejacket.png",
+  "iphone-17.png": "/images/product/cutouts/iphone-17.png",
+  "laptop.png": "/images/product/cutouts/laptop.png",
+  "S-kacket.png": "/images/product/cutouts/S-kacket.png",
+  "sneakers.png": "/images/product/cutouts/sneakers.png",
+  "umbrella.png": "/images/product/cutouts/umbrella.png",
+}
+
+function buildHeroSubtitle(description: string | undefined, category: string): string {
+  const clean = (description ?? "").replace(/\s+/g, " ").trim()
+  if (clean) {
+    const firstSentence = clean.split(/[.!?]/)[0]?.trim() || clean
+    if (firstSentence.length <= 64) return firstSentence
+    const sliced = firstSentence.slice(0, 62)
+    const lastSpace = sliced.lastIndexOf(" ")
+    return `${(lastSpace > 24 ? sliced.slice(0, lastSpace) : sliced).trim()}…`
+  }
+  const labels: Record<string, string> = {
+    phones: "Phones & IT",
+    gaming: "Audio & Gaming",
+    sneakers: "Footwear",
+    clothes: "Apparel",
+    food: "Gourmet Food",
+  }
+  return labels[category] ?? "Curated Selection"
+}
+
 /** Maps a store product onto the moving hero showcase card. */
 export function toHeroItem(product: Product): HeroProductItem {
   const originalPrice =
@@ -162,16 +302,21 @@ export function toHeroItem(product: Product): HeroProductItem {
       : undefined
   const badge =
     discountPercent && discountPercent > 0 ? `-${discountPercent}% OFF` : undefined
+  const category = storefrontCategory(product)
+  const basename = product.image.split("/").pop() ?? ""
 
   return {
     id: String(product.id),
-    name: product.name.toUpperCase(),
+    name: product.name,
+    subtitle: buildHeroSubtitle(product.description, category),
+    category,
     price: `$${formatPrice(product.price)}`,
     originalPrice:
       originalPrice && originalPrice > product.price ? `$${formatPrice(originalPrice)}` : undefined,
     discountBadge: badge,
     shipping: product.price >= 50 ? "FREE SHIPPING" : "FAST SHIPPING",
     mainImage: product.image,
+    cutoutImage: HERO_CUTOUT_BY_IMAGE[basename],
     video: getProductVideo(product),
   }
 }

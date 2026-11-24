@@ -35,6 +35,7 @@ const DEFAULT_COLORS: ColorOption[] = [
 
 /** New-design add/edit form wired to the real catalog. data: URLs upload on save. */
 export function AddProductView({
+  isDarkMode = false,
   initial,
   categories,
   onAddCategory,
@@ -42,6 +43,7 @@ export function AddProductView({
   onSaved,
   onToast,
 }: {
+  isDarkMode?: boolean
   initial?: ProductItem | null
   categories: CategoryOption[]
   onAddCategory?: (label: string) => Promise<{ ok: boolean; error?: string }>
@@ -172,6 +174,7 @@ export function AddProductView({
   return (
     <div>
       <PageHeader
+        isDarkMode={isDarkMode}
         isEditMode={isEdit}
         onBack={onBack}
         onSaveDraft={() => onToast("Draft saved locally — publish via Add Product")}
@@ -182,6 +185,7 @@ export function AddProductView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-7 space-y-6">
           <GeneralInfoCard
+            isDarkMode={isDarkMode}
             name={name}
             onNameChange={setName}
             description={description}
@@ -202,6 +206,7 @@ export function AddProductView({
             onProductTypeChange={setProductType}
           />
           <PricingStockCard
+            isDarkMode={isDarkMode}
             basePrice={basePrice}
             onBasePriceChange={setBasePrice}
             stock={stock}
@@ -216,6 +221,7 @@ export function AddProductView({
         </div>
         <div className="lg:col-span-5 space-y-6">
           <UploadImageCard
+            isDarkMode={isDarkMode}
             images={images}
             activeImageIndex={activeImage}
             onSelectImage={setActiveImage}
@@ -230,6 +236,7 @@ export function AddProductView({
             onRemoveVideo={() => setVideo("")}
           />
           <CategoryCard
+            isDarkMode={isDarkMode}
             category={category}
             onCategoryChange={setCategory}
             categories={categories}

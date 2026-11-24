@@ -1,15 +1,21 @@
 "use server"
 
+import { createClient } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { isAdminEmail } from "@/lib/admin"
 import { CATEGORIES } from "@/lib/categories"
 import { LEGACY_CATEGORY } from "@/components/storefront/product-adapter"
-import { isSupabaseOffline } from "@/lib/supabase-circuit"
+import { createResilientFetch, isSupabaseOffline } from "@/lib/supabase-circuit"
 
 const CATEGORIES_TABLE = "categories"
 const PRODUCTS_TABLE = "products"
+const CATEGORIES_REVALIDATE_MS = 900_000
+const CATEGORIES_QUERY_TIMEOUT_MS = 1200
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 export interface CategoryRow {
   id: string
@@ -22,8 +28,28 @@ export type CategoryActionResult<T = null> =
 
 const BUILTIN_IDS: Set<string> = new Set(CATEGORIES.map((c) => c.id))
 
+interface CategoriesCacheSlot {
+  at: number
+  data: CategoryRow[]
+  dirty: boolean
+}
+
 const globalCategories = globalThis as unknown as {
   __astoreFallbackCategories?: CategoryRow[]
+  __astoreCategoriesCache?: CategoriesCacheSlot
+}
+
+function getCategoriesCache(): CategoriesCacheSlot {
+  if (!globalCategories.__astoreCategoriesCache) {
+    globalCategories.__astoreCategoriesCache = { at: 0, data: [], dirty: true }
+  }
+  return globalCategories.__astoreCategoriesCache
+}
+
+function invalidateCategoriesCache(): void {
+  const slot = getCategoriesCache()
+  slot.at = 0
+  slot.dirty = true
 }
 
 function getFallbackCategories(): CategoryRow[] {
@@ -35,21 +61,44 @@ function getFallbackCategories(): CategoryRow[] {
 
 /** DB-defined categories (empty when offline or missing). */
 export async function listCategoriesAction(): Promise<CategoryActionResult<CategoryRow[]>> {
-  if (isSupabaseOffline()) {
+  if (isSupabaseOffline() || !supabaseUrl || !supabaseAnonKey) {
     return { ok: true, data: getFallbackCategories() }
   }
+
+  const slot = getCategoriesCache()
+  if (!slot.dirty && Date.now() - slot.at < CATEGORIES_REVALIDATE_MS) {
+    return { ok: true, data: slot.data }
+  }
+
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data, error } = await supabase
-      .from(CATEGORIES_TABLE)
-      .select("id, label")
-      .order("label", { ascending: true })
-    if (error) {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: createResilientFetch({ noStore: true }) },
+    })
+
+    const result = await Promise.race([
+      supabase.from(CATEGORIES_TABLE).select("id, label").order("label", { ascending: true }),
+      new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(
+          () => resolve({ data: null, error: { message: "Category query timeout" } }),
+          CATEGORIES_QUERY_TIMEOUT_MS
+        )
+      ),
+    ])
+
+    if (result.error) {
+      if (slot.data.length > 0) return { ok: true, data: slot.data }
       if (isSupabaseOffline()) return { ok: true, data: getFallbackCategories() }
-      return { ok: false, error: error.message }
+      return { ok: false, error: result.error.message }
     }
-    return { ok: true, data: (data ?? []) as CategoryRow[] }
+
+    const rows = (result.data ?? []) as CategoryRow[]
+    slot.data = rows
+    slot.at = Date.now()
+    slot.dirty = false
+    return { ok: true, data: rows }
   } catch {
+    if (slot.data.length > 0) return { ok: true, data: slot.data }
     return { ok: true, data: getFallbackCategories() }
   }
 }
@@ -103,6 +152,7 @@ export async function createCategoryAction(
     }
     const row = { id, label: label.trim() }
     globalCategories.__astoreFallbackCategories = [...current, row]
+    invalidateCategoriesCache()
     revalidatePath("/")
     revalidatePath("/seller")
     return { ok: true, data: row }
@@ -119,6 +169,7 @@ export async function createCategoryAction(
       error: error.code === "23505" ? "That category already exists." : error.message,
     }
   }
+  invalidateCategoriesCache()
   revalidatePath("/")
   revalidatePath("/seller")
   return { ok: true, data: data as CategoryRow }
@@ -133,6 +184,7 @@ export async function deleteCategoryAction(id: string): Promise<CategoryActionRe
 
   if (isSupabaseOffline()) {
     globalCategories.__astoreFallbackCategories = getFallbackCategories().filter((c) => c.id !== id)
+    invalidateCategoriesCache()
     revalidatePath("/")
     revalidatePath("/seller")
     return { ok: true, data: null }
@@ -152,6 +204,7 @@ export async function deleteCategoryAction(id: string): Promise<CategoryActionRe
 
   const { error } = await gate.db.from(CATEGORIES_TABLE).delete().eq("id", id)
   if (error) return { ok: false, error: error.message }
+  invalidateCategoriesCache()
   revalidatePath("/")
   revalidatePath("/seller")
   return { ok: true, data: null }

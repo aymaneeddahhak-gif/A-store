@@ -43,7 +43,7 @@ export interface EcommerceProduct {
   stock?: number
   specs: [ProductSpec, ProductSpec, ProductSpec]
   isLiked?: boolean
-  colors?: { name: string; hex: string }[]
+  colors?: { name: string; hex: string; image?: string }[]
 }
 
 export interface CategoryCapsule {
@@ -69,10 +69,13 @@ export interface FilterState {
 export interface HeroProductItem {
   id: string
   name: string
+  subtitle: string
+  category: string
   price: string
   originalPrice?: string
   discountBadge?: string
   shipping: string
   mainImage: string
+  cutoutImage?: string
   video: string | null
 }

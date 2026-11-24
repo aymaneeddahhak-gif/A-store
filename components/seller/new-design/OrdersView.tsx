@@ -15,10 +15,10 @@ import {
   LayoutGrid,
   List,
   SlidersHorizontal,
-  Package,
 } from "lucide-react"
 import type { Order } from "@/lib/types"
 import { TRACKING_REQUIRED_STATUSES, orderNextStatuses } from "@/lib/types"
+import { VectorAvatar, avatarVariantForEmail } from "@/components/avatars/role-avatar"
 
 /** Short display id — works for legacy ord_<ts>_<rand> and plain UUIDs. */
 export function shortOrderId(id: string) {
@@ -379,20 +379,6 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               Orders Console
             </h2>
           </div>
-
-          <div
-            className={`flex items-center p-1 rounded-xl border ${
-              isDarkMode ? "bg-[#181a1b] border-gray-800" : "bg-gray-100/80 border-gray-200/70"
-            }`}
-          >
-            <span className="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 bg-[#98e4af] text-gray-950 font-bold">
-              <Package className="w-3.5 h-3.5" />
-              <span>Fulfilment</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 font-bold">
-                {totals.count}
-              </span>
-            </span>
-          </div>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -586,9 +572,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#98e4af]/30 flex items-center justify-center font-bold text-gray-900 dark:text-white text-xs shrink-0">
-                          {row.buyerName.charAt(0)}
-                        </div>
+                        <VectorAvatar
+                          variant={avatarVariantForEmail(row.buyerEmail)}
+                          sizeClass="w-9 h-9"
+                        />
                         <div className="min-w-0">
                           <p
                             className={`font-bold truncate ${

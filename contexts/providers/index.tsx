@@ -34,10 +34,12 @@ import type { Product } from "@/lib/types"
 export function Providers({
   children,
   initialProductsPromise,
+  initialCategoriesPromise,
 }: {
   children: ReactNode
   /** Streaming catalog read — the layout starts it but does not await it. */
   initialProductsPromise?: Promise<Product[]>
+  initialCategoriesPromise?: Promise<{ id: string; label: string }[]>
 }) {
   return (
     <ToastProvider>
@@ -46,7 +48,10 @@ export function Providers({
           <NotificationsProvider>
             <CartProvider>
               <QuickViewProvider>
-                <CatalogProvider productsPromise={initialProductsPromise}>
+                <CatalogProvider
+                  productsPromise={initialProductsPromise}
+                  categoriesPromise={initialCategoriesPromise}
+                >
                   <LikesProvider>
                     <OrdersProvider>
                       <SellerNavProvider>{children}</SellerNavProvider>

@@ -1,111 +1,102 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import Image from "next/image"
+import { useEffect, useRef } from "react"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 /**
  * Login Mascot Showcase:
- * Displays the store lion mascot @[public/videos/mascot/login.mp4] standing
- * beside the login card at large scale (matching the form height), with ZERO
- * background (chroma-keyed canvas in real time + transparent poster fallback).
+ * Plays the background-free transparent WebM exported from
+ * `public/videos/mascot/login.mp4`, auto-playing and looping reliably even
+ * after switching browser tabs or returning from another application window.
  */
 export function LoginShowcase() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [videoReady, setVideoReady] = useState(false)
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas) return
+    if (!video) return
 
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })
-    if (!ctx) return
-
-    let animId: number
-    let isRunning = true
-
-    const render = () => {
-      if (!isRunning) return
-
-      if (video.readyState >= 2 && !video.paused) {
-        if (!videoReady) setVideoReady(true)
-        const w = canvas.width
-        const h = canvas.height
-        ctx.clearRect(0, 0, w, h)
-        ctx.drawImage(video, 0, 0, w, h)
-        const frame = ctx.getImageData(0, 0, w, h)
-        const data = frame.data
-        const len = data.length
-
-        for (let i = 0; i < len; i += 4) {
-          const r = data[i]
-          const g = data[i + 1]
-          const b = data[i + 2]
-          const bright = (r + g + b) / 3
-          const sat = Math.max(r, g, b) - Math.min(r, g, b)
-
-          // Background chroma keying: neutral studio backdrop
-          if (bright > 214 && sat < 24) {
-            data[i + 3] = 0
-          } else if (bright > 196 && sat < 18) {
-            data[i + 3] = Math.max(0, Math.min(255, Math.floor(255 * (1 - (bright - 196) / 18))))
-          }
-        }
-        ctx.putImageData(frame, 0, 0)
-      }
-
-      animId = requestAnimationFrame(render)
+    if (reducedMotion) {
+      video.pause()
+      return
     }
 
-    render()
+    const ensurePlaying = () => {
+      if (document.hidden) return
+      video.muted = true
+      if (video.ended || (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= video.duration - 0.05)) {
+        video.currentTime = 0
+      }
+      if (video.paused) {
+        void video.play().catch(() => {})
+      }
+    }
+
+    const handleEnded = () => {
+      video.currentTime = 0
+      void video.play().catch(() => {})
+    }
+
+    const handlePause = () => {
+      // Chromium sometimes pauses background/looping videos when switching windows;
+      // resume immediately whenever the page is visible.
+      if (!document.hidden) {
+        window.setTimeout(ensurePlaying, 60)
+      }
+    }
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        ensurePlaying()
+      }
+    }
+
+    const handleFocus = () => {
+      ensurePlaying()
+    }
+
+    // Kick off immediately + keep alive across tab/window switches and stalls
+    ensurePlaying()
+    video.addEventListener("ended", handleEnded)
+    video.addEventListener("pause", handlePause)
+    video.addEventListener("stalled", ensurePlaying)
+    video.addEventListener("canplay", ensurePlaying)
+    document.addEventListener("visibilitychange", handleVisibility)
+    window.addEventListener("focus", handleFocus)
+    window.addEventListener("pageshow", handleFocus)
+
+    const watchdog = window.setInterval(() => {
+      if (!document.hidden && (video.paused || video.ended)) {
+        ensurePlaying()
+      }
+    }, 1200)
 
     return () => {
-      isRunning = false
-      cancelAnimationFrame(animId)
+      window.clearInterval(watchdog)
+      video.removeEventListener("ended", handleEnded)
+      video.removeEventListener("pause", handlePause)
+      video.removeEventListener("stalled", ensurePlaying)
+      video.removeEventListener("canplay", ensurePlaying)
+      document.removeEventListener("visibilitychange", handleVisibility)
+      window.removeEventListener("focus", handleFocus)
+      window.removeEventListener("pageshow", handleFocus)
     }
-  }, [videoReady])
+  }, [reducedMotion])
 
   return (
-    <div className="relative flex items-center justify-center w-full h-full select-none pointer-events-none">
-      {/* Hidden source video */}
+    <div className="relative flex items-start justify-center w-full select-none pointer-events-none">
       <video
         ref={videoRef}
+        src="/videos/mascot/login.webm"
+        poster="/images/mascot/lion-login.png"
         autoPlay
         loop
         muted
         playsInline
         preload="auto"
-        className="sr-only"
-        aria-hidden
-      >
-        <source src="/videos/mascot/login.webm" type="video/webm" />
-        <source src="/videos/mascot/login.mp4" type="video/mp4" />
-      </video>
-
-      {/* Immediate crisp transparent poster while video boots */}
-      {!videoReady && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Image
-            src="/images/mascot/lion-login.png"
-            alt="Store Mascot"
-            width={480}
-            height={540}
-            priority
-            className="h-full w-auto max-h-[500px] object-contain drop-shadow-2xl"
-          />
-        </div>
-      )}
-
-      {/* Real-time background-free animated canvas */}
-      <canvas
-        ref={canvasRef}
-        width={480}
-        height={540}
         aria-label="A-Store mascot welcoming you"
-        className={`w-auto h-full max-h-[500px] object-contain drop-shadow-2xl transition-opacity duration-300 ${
-          videoReady ? "opacity-100" : "opacity-0"
-        }`}
+        className="w-auto h-[840px] max-w-none shrink-0 object-contain -mt-[190px]"
       />
     </div>
   )

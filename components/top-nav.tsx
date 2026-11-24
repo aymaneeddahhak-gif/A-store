@@ -121,7 +121,7 @@ export function TopNav() {
                     window.scrollTo({ top: 0, behavior: "smooth" })
                   }
                 }}
-                className={`p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] transition-all shrink-0 ${
+                className={`p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] transition-all shrink-0 cursor-pointer active:scale-95 ${
                   pathname === "/" ? "opacity-100 text-[var(--foreground)]" : "opacity-70 hover:opacity-100"
                 }`}
                 aria-label="Home"
@@ -160,7 +160,7 @@ export function TopNav() {
                       setSearchQuery("")
                       setSearchOpen(false)
                     }}
-                    className="absolute right-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-0.5 rounded-full"
+                    className="absolute right-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-0.5 rounded-full cursor-pointer active:scale-95"
                     aria-label="Close search"
                   >
                     <X size={14} />
@@ -173,7 +173,7 @@ export function TopNav() {
                     if (isNotificationOpen) toggleNotifications()
                     setSearchOpen(true)
                   }}
-                  className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] opacity-70 hover:opacity-100 transition-all shrink-0"
+                  className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] opacity-70 hover:opacity-100 transition-all shrink-0 cursor-pointer active:scale-95"
                   aria-label="Open search"
                 >
                   <Search size={19} />
@@ -184,7 +184,7 @@ export function TopNav() {
               <button
                 type="button"
                 onClick={toggleCart}
-                className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] opacity-70 hover:opacity-100 transition-all relative shrink-0"
+                className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] opacity-70 hover:opacity-100 transition-all relative shrink-0 cursor-pointer active:scale-95"
                 aria-label={`Shopping cart, ${cartCount} item${cartCount === 1 ? "" : "s"}`}
               >
                 <ShoppingBag size={19} />
@@ -209,7 +209,7 @@ export function TopNav() {
                   data-notification-trigger
                   aria-expanded={isNotificationOpen}
                   aria-haspopup="dialog"
-                  className={`p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] transition-all relative shrink-0 ${
+                  className={`p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] transition-all relative shrink-0 cursor-pointer active:scale-95 ${
                     isNotificationOpen ? "opacity-100 bg-[var(--glass-bg)]" : "opacity-70 hover:opacity-100"
                   }`}
                   aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
@@ -332,7 +332,7 @@ export function TopNav() {
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] md:hidden shrink-0"
+                className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--glass-bg)] text-[var(--foreground)] md:hidden shrink-0 cursor-pointer active:scale-95"
                 aria-label="Open menu"
                 aria-expanded={mobileOpen}
               >

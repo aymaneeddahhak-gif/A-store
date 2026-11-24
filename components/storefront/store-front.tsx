@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { PackageSearch } from "lucide-react"
@@ -13,7 +14,7 @@ import { FilterCapsulesBar } from "@/components/storefront/filter-capsules-bar"
 import { HeroShowcase } from "@/components/storefront/hero-showcase"
 import { ProductCard } from "@/components/storefront/product-card"
 import { toStorefrontProduct } from "@/components/storefront/product-adapter"
-import { StorefrontSkeleton } from "@/components/loading-skeletons"
+import { CartLoader } from "@/components/delivery-loader-overlay"
 
 const FilterDrawer = dynamic(
   () => import("@/components/storefront/filter-drawer").then((m) => m.FilterDrawer),
@@ -61,6 +62,10 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
   const [freeShippingOnly, setFreeShippingOnly] = useState(false)
   const [topOrdersOnly, setTopOrdersOnly] = useState(false)
   const [dealsOnly, setDealsOnly] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   // Entry popup shows once per session so returning to "/" does not re-block the user.
   const [dealsOpen, setDealsOpen] = useState(false)
   React.useEffect(() => {
@@ -214,6 +219,25 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
 
   const handleOpenProduct = (id: string) => router.push(`/product/${id}`)
 
+  // Show the smooth CartLoader from first paint / SSR onward until products arrive,
+  // preventing the Filter Bar jump and grey skeleton flash on reload.
+  if (products.length === 0) {
+    const loaderOverlay = (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-[#faf7f2]/92 dark:bg-[#0b0d11]/90 backdrop-blur-md"
+      >
+        <CartLoader message="Loading" />
+      </div>
+    )
+    return (
+      <div className="min-h-screen">
+        {mounted ? createPortal(loaderOverlay, document.body) : loaderOverlay}
+      </div>
+    )
+  }
+
   return (
     <div className="-mx-4 flex flex-col">
       <main className="w-full">
@@ -222,7 +246,10 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
         {!isFiltering && <HeroShowcase />}
 
         {/* 2. FILTER CAPSULES BAR */}
-        <header className="w-full px-4 sm:px-6 pt-8 pb-4">
+        <header
+          id="storefront-catalog-start"
+          className="w-full px-4 sm:px-6 pt-8 pb-4 scroll-mt-[104px] sm:scroll-mt-[120px] lg:scroll-mt-[132px]"
+        >
           <FilterCapsulesBar
             selectedCategory={selectedCategory}
             onSelectCategory={setCategory}
@@ -246,12 +273,7 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
             </span>
           </div>
 
-          {/* Catalog still streaming in: shimmer placeholders instead of a
-              false "no products" verdict (products start empty and fill when
-              the seeded server read lands). */}
-          {products.length === 0 ? (
-            <StorefrontSkeleton count={6} />
-          ) : filteredProducts.length === 0 ? (
+          {filteredProducts.length === 0 ? (
             trimmedQuery && searchSuggestions.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
                 {searchSuggestions.map((product) => (

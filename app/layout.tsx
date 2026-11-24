@@ -8,6 +8,7 @@ import { Providers } from "@/contexts/providers"
 import { GlobalOverlays } from "@/components/global-overlays"
 import { NavigationProgress } from "@/components/navigation-progress"
 import { listStoreProducts } from "@/lib/queries/products"
+import { listCategoriesAction } from "@/lib/actions/categories"
 import { SITE_URL } from "@/lib/site"
 
 const siteUrl = SITE_URL
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
     "A-store — premium tech and fashion e-commerce, curated products, seamless checkout, and seller tools.",
   keywords: ["e-commerce", "premium store", "electronics", "fashion"],
   authors: [{ name: "A-store" }],
+  icons: { icon: "/icon.png" },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -41,7 +43,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#e0e0e0" },
+    { media: "(prefers-color-scheme: light)", color: "#faf7f2" },
     { media: "(prefers-color-scheme: dark)", color: "#050505" },
   ],
 }
@@ -54,7 +56,11 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   const initialProductsPromise = listStoreProducts()
+  const initialCategoriesPromise = listCategoriesAction()
+    .then((res) => (res.ok ? res.data : []))
+    .catch(() => [])
   void initialProductsPromise
+  void initialCategoriesPromise
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -75,7 +81,10 @@ export default async function RootLayout({
         >
           Skip to content
         </a>
-        <Providers initialProductsPromise={initialProductsPromise}>
+        <Providers
+          initialProductsPromise={initialProductsPromise}
+          initialCategoriesPromise={initialCategoriesPromise}
+        >
           <NavigationProgress />
           <GlobalOverlays />
 

@@ -386,7 +386,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <p className={`font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                       {ord.amount}
                     </p>
-                    <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#98e4af]/20 text-[#1e2022] dark:text-[#98e4af]">
+                    <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-[#98e4af]/20 text-[#1e2022] dark:text-[#98e4af]">
                       {ord.status}
                     </span>
                   </div>

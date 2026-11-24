@@ -15,6 +15,7 @@ import {
   Boxes,
   CheckCircle2,
   RefreshCw,
+  RotateCcw,
   SlidersHorizontal,
   Pin,
 } from 'lucide-react';
@@ -29,6 +30,8 @@ interface ProductsListViewProps {
   onDeleteProduct: (productId: string) => void;
   onToggleFeatured?: (productId: string, featured: boolean) => void;
   canFeature?: boolean;
+  onResetDemo?: () => void;
+  isResettingDemo?: boolean;
   onUpdateStock?: (
     productId: string,
     newStock: string,
@@ -46,6 +49,8 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
   onDeleteProduct,
   onToggleFeatured,
   canFeature = false,
+  onResetDemo,
+  isResettingDemo = false,
   onUpdateStock,
   onShowToast,
 }) => {
@@ -125,49 +130,37 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
             </div>
           </div>
 
-          <div
-            className={`flex items-center p-1 rounded-xl border ${
-              isDarkMode ? 'bg-[#181a1b] border-gray-800' : 'bg-gray-100/80 border-gray-200/70'
-            }`}
-          >
+          <div className="flex items-center gap-2">
             <button
               type="button"
               id="tab-all-products"
               onClick={() => setActiveSection('catalog')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-98 ${
+              className={`h-9 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer active:scale-98 ${
                 activeSection === 'catalog'
-                  ? 'bg-[#98e4af] text-gray-950 font-bold shadow-xs'
+                  ? 'bg-[#98e4af] border-[#98e4af] text-gray-950 font-bold'
                   : isDarkMode
-                  ? 'text-gray-400 hover:text-white'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-[#1e2022] border-gray-800 text-gray-400 hover:text-white'
+                  : 'bg-white border-gray-200/80 text-gray-600 hover:text-gray-900'
               }`}
             >
               <Package className="w-3.5 h-3.5" />
               <span>All Products</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-bold">
-                {products.length}
-              </span>
             </button>
 
             <button
               type="button"
               id="tab-inventory"
               onClick={() => setActiveSection('inventory')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-98 ${
+              className={`h-9 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer active:scale-98 ${
                 activeSection === 'inventory'
-                  ? 'bg-[#98e4af] text-gray-950 font-bold shadow-xs'
+                  ? 'bg-[#98e4af] border-[#98e4af] text-gray-950 font-bold'
                   : isDarkMode
-                  ? 'text-gray-400 hover:text-white'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-[#1e2022] border-gray-800 text-gray-400 hover:text-white'
+                  : 'bg-white border-gray-200/80 text-gray-600 hover:text-gray-900'
               }`}
             >
               <Archive className="w-3.5 h-3.5" />
               <span>Inventory & Stock</span>
-              {lowStockCount > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">
-                  {lowStockCount}
-                </span>
-              )}
             </button>
           </div>
         </div>
@@ -185,6 +178,24 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Sync Stock</span>
+            </button>
+          )}
+
+          {onResetDemo && (
+            <button
+              id="btn-reset-demo"
+              type="button"
+              onClick={onResetDemo}
+              disabled={isResettingDemo}
+              className={`h-10 px-4 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-98 ${
+                isDarkMode
+                  ? 'bg-[#212427] border-gray-700 text-gray-200 hover:bg-[#272a2e]'
+                  : 'bg-white border-gray-300/80 text-gray-700 hover:bg-gray-50'
+              }`}
+              title="Restore the 3 starter demo products"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isResettingDemo ? 'animate-spin' : ''}`} />
+              <span>{isResettingDemo ? 'Resetting…' : 'Reset Demo'}</span>
             </button>
           )}
 

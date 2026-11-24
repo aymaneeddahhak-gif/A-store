@@ -76,7 +76,7 @@ export function NotificationPanel() {
                     {unreadCount > 0 && (
                         <button
                             onClick={markAllAsRead}
-                            className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-emerald-400 transition-all"
+                            className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-emerald-400 transition-all cursor-pointer"
                             title="Mark all as read"
                             aria-label="Mark all notifications as read"
                         >
@@ -86,7 +86,7 @@ export function NotificationPanel() {
                     {notifications.length > 0 && (
                         <button
                             onClick={clearAllNotifications}
-                            className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-rose-400 transition-all"
+                            className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-rose-400 transition-all cursor-pointer"
                             title="Clear all"
                             aria-label="Clear all notifications"
                         >
@@ -95,7 +95,7 @@ export function NotificationPanel() {
                     )}
                     <button
                         onClick={toggleNotifications}
-                        className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all"
+                        className="p-1.5 rounded-lg hover:bg-[var(--glass-bg)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all cursor-pointer"
                         aria-label="Close notifications"
                     >
                         <X size={16} />
@@ -157,7 +157,7 @@ export function NotificationPanel() {
                 <div className="px-5 py-3 border-t border-[var(--border-color)] bg-[var(--glass-bg)]/30">
                     <button
                         onClick={toggleNotifications}
-                        className="w-full text-center text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                        className="w-full text-center text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
                     >
                         Close
                     </button>

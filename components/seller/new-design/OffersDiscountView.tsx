@@ -58,7 +58,7 @@ function DealPopupCard({
   return (
     <div className="w-full max-w-md mx-auto">
       <div
-        className={`overflow-hidden relative w-full rounded-2xl bg-gray-50 ${tier.text} flex flex-col justify-end items-center gap-3 py-10 px-6 shadow-2xl`}
+        className={`overflow-hidden relative w-full rounded-2xl bg-white ${tier.text} flex flex-col justify-end items-center gap-3 py-10 px-6 shadow-2xl`}
       >
         <svg
           className="absolute opacity-20 -rotate-12 -bottom-20 -right-20 w-44 h-44 stroke-current pointer-events-none"
@@ -91,13 +91,13 @@ function DealPopupCard({
         <span className={`font-extrabold text-7xl leading-none -skew-x-12 -skew-y-12 ${tier.text}`}>
           {tier.pct}%
         </span>
-        <div className="h-[150px] w-full max-w-[340px]">
+        <div className="h-[150px] w-full max-w-[340px] rounded-xl bg-white overflow-hidden flex items-center justify-center">
           <Image
-            src="/images/discount/discount.jpeg"
+            src="/images/discount/discount-white.png"
             alt=""
             width={340}
-            height={150}
-            className="h-full w-full object-cover object-top rounded-xl"
+            height={190}
+            className="h-full w-full object-contain object-center bg-white"
           />
         </div>
         <button
@@ -134,9 +134,11 @@ function DealPopupCard({
  * removed by design; the home popup's words come from the seeded defaults.
  */
 export function OffersDiscountView({
+  isDarkMode = false,
   products,
   isAdmin,
 }: {
+  isDarkMode?: boolean
   products: Product[]
   /** Only the store admin may apply offer tiers to their own products. */
   isAdmin: boolean
@@ -200,9 +202,9 @@ export function OffersDiscountView({
   return (
     <div className="space-y-6">
       {/* DEAL POPUP LADDER — exact home cards, 100% → 10% */}
-      <div className="p-6 rounded-[22px] border bg-white border-gray-100 shadow-sm">
+      <div className={`p-6 rounded-[22px] border transition-colors ${isDarkMode ? 'bg-[#1e2022] border-gray-800' : 'bg-white border-gray-100 shadow-sm'}`}>
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-gray-900">Deal Popups 100% → 10%</h3>
+          <h3 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Deal Popups 100% → 10%</h3>
           <p className="text-xs text-gray-400 mt-0.5">Same card as the home discount popup, one color per tier</p>
           {isAdmin && (
             <div className="mt-2 flex items-center gap-3">
@@ -211,7 +213,7 @@ export function OffersDiscountView({
                 type="button"
                 onClick={() => void handleClearOffer()}
                 disabled={applying === -1}
-                className="text-[11px] font-semibold text-gray-500 hover:text-gray-900 underline disabled:opacity-40 cursor-pointer"
+                className={`text-[11px] font-semibold underline disabled:opacity-40 cursor-pointer ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
               >
                 Clear offer (restore prices)
               </button>

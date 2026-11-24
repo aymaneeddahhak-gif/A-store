@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { isAdminEmail } from "@/lib/admin"
+import { isSellerEmail } from "@/lib/seller"
 
 export interface Subscriber {
   email: string
@@ -20,7 +21,9 @@ export async function listSubscribersAction(): Promise<DashboardActionResult<Sub
   try {
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
-    if (!auth?.user) return { ok: false, error: "You must be signed in." }
+    if (!auth?.user || !isSellerEmail(auth.user.email)) {
+      return { ok: false, error: "Seller access required." }
+    }
     const { data, error } = await supabase
       .from("newsletter_subscribers")
       .select("email, source, created_at")
@@ -80,7 +83,9 @@ export async function getStoreSettingsAction(): Promise<DashboardActionResult<St
   try {
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
-    if (!auth?.user) return { ok: false, error: "You must be signed in." }
+    if (!auth?.user || !isSellerEmail(auth.user.email)) {
+      return { ok: false, error: "Seller access required." }
+    }
     const { data, error } = await supabase
       .from("store_settings")
       .select("store_name, currency, notification_email")

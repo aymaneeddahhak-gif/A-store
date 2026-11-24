@@ -11,6 +11,8 @@ import { getFallbackProducts, setFallbackProducts } from "@/lib/fallback-catalog
 import { PRODUCTS_CACHE_TAG, invalidateProductCache } from "@/lib/queries/products"
 
 const TABLE = "deals_popup"
+const DEALS_REVALIDATE_MS = 900_000
+const DEALS_QUERY_TIMEOUT_MS = 1200
 
 export interface DealsPopupConfig {
   enabled: boolean
@@ -26,12 +28,32 @@ const DEFAULT_DEALS_POPUP: DealsPopupConfig = {
   button_label: "Shop now",
 }
 
+interface DealsCacheSlot {
+  at: number
+  data: DealsPopupConfig
+  dirty: boolean
+}
+
 const globalDeals = globalThis as unknown as {
   __astoreFallbackDealsConfig?: DealsPopupConfig
   __astoreFallbackDealsSnapshot?: {
     applied_percent: number | null
     previous_prices: { id: number; price: number; original_price: number | null }[]
   }
+  __astoreDealsCache?: DealsCacheSlot
+}
+
+function getDealsCache(): DealsCacheSlot {
+  if (!globalDeals.__astoreDealsCache) {
+    globalDeals.__astoreDealsCache = { at: 0, data: DEFAULT_DEALS_POPUP, dirty: true }
+  }
+  return globalDeals.__astoreDealsCache
+}
+
+function invalidateDealsCache(): void {
+  const slot = getDealsCache()
+  slot.at = 0
+  slot.dirty = true
 }
 
 export type DealsPopupResult<T> =
@@ -56,28 +78,45 @@ export async function getDealsPopupAction(): Promise<DealsPopupResult<DealsPopup
   const fallback = globalDeals.__astoreFallbackDealsConfig ?? DEFAULT_DEALS_POPUP
   if (isSupabaseOffline()) return { ok: true, data: fallback }
 
+  const slot = getDealsCache()
+  if (!slot.dirty && Date.now() - slot.at < DEALS_REVALIDATE_MS) {
+    return { ok: true, data: slot.data }
+  }
+
   const anon = createAnonDealsClient()
   if (!anon) return { ok: true, data: fallback }
 
   try {
-    const { data, error } = await anon
-      .from(TABLE)
-      .select("enabled, title, subtitle, button_label")
-      .eq("id", 1)
-      .maybeSingle()
-    if (error || !data) return { ok: true, data: fallback }
-    return {
-      ok: true,
-      data: {
-        enabled: (data as Partial<DealsPopupConfig>).enabled ?? true,
-        title: (data as Partial<DealsPopupConfig>).title || DEFAULT_DEALS_POPUP.title,
-        subtitle: (data as Partial<DealsPopupConfig>).subtitle || DEFAULT_DEALS_POPUP.subtitle,
-        button_label:
-          (data as Partial<DealsPopupConfig>).button_label || DEFAULT_DEALS_POPUP.button_label,
-      },
+    const result = await Promise.race([
+      anon
+        .from(TABLE)
+        .select("enabled, title, subtitle, button_label")
+        .eq("id", 1)
+        .maybeSingle(),
+      new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(
+          () => resolve({ data: null, error: { message: "Deals query timeout" } }),
+          DEALS_QUERY_TIMEOUT_MS
+        )
+      ),
+    ])
+
+    if (result.error || !result.data) {
+      return { ok: true, data: slot.dirty ? fallback : slot.data }
     }
+    const resolved: DealsPopupConfig = {
+      enabled: (result.data as Partial<DealsPopupConfig>).enabled ?? true,
+      title: (result.data as Partial<DealsPopupConfig>).title || DEFAULT_DEALS_POPUP.title,
+      subtitle: (result.data as Partial<DealsPopupConfig>).subtitle || DEFAULT_DEALS_POPUP.subtitle,
+      button_label:
+        (result.data as Partial<DealsPopupConfig>).button_label || DEFAULT_DEALS_POPUP.button_label,
+    }
+    slot.data = resolved
+    slot.at = Date.now()
+    slot.dirty = false
+    return { ok: true, data: resolved }
   } catch {
-    return { ok: true, data: fallback }
+    return { ok: true, data: slot.dirty ? fallback : slot.data }
   }
 }
 
@@ -105,6 +144,7 @@ export async function updateDealsPopupAction(
       subtitle: row.subtitle,
       button_label: row.button_label,
     }
+    invalidateDealsCache()
     revalidatePath("/")
     return { ok: true, data: { ...row } }
   }
@@ -119,12 +159,14 @@ export async function updateDealsPopupAction(
         subtitle: row.subtitle,
         button_label: row.button_label,
       }
+      invalidateDealsCache()
       revalidatePath("/")
       return { ok: true, data: { ...row } }
     }
     return { ok: false, error: error.message }
   }
 
+  invalidateDealsCache()
   revalidatePath("/")
   void logAudit({
     actorId: auth.user.id,

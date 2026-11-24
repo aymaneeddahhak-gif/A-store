@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { Search, Mail, Trash2, Pin } from 'lucide-react';
+import { VectorAvatar, avatarVariantForEmail } from '@/components/avatars/role-avatar';
 
 export interface LiveCustomer {
   /** Stable identity for React keys — the customer user id. */
@@ -117,9 +118,10 @@ export const CustomersView: React.FC<{
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#98e4af]/30 flex items-center justify-center font-bold text-gray-900 dark:text-white text-sm">
-                  {cust.name.charAt(0)}
-                </div>
+                <VectorAvatar
+                  variant={avatarVariantForEmail(cust.email)}
+                  sizeClass="w-10 h-10"
+                />
                 <div>
                   <h4 className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cust.name}</h4>
                   <p className="text-xs text-gray-400">{cust.email}</p>
@@ -134,7 +136,7 @@ export const CustomersView: React.FC<{
                   <span className="block text-xs font-bold">{cust.orders} orders</span>
                   <span className="text-[11px] font-bold text-emerald-600 dark:text-[#98e4af]">{cust.total} spent</span>
                 </div>
-                <span className="hidden sm:inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#98e4af]/20 text-gray-900 dark:text-[#98e4af]">
+                <span className="hidden sm:inline-block px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#98e4af]/20 text-gray-900 dark:text-[#98e4af]">
                   {cust.tier}
                 </span>
               </div>
@@ -404,7 +406,7 @@ export const NewsletterView: React.FC<{
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-[#98e4af]/30 flex items-center justify-center text-gray-900 dark:text-white shrink-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-[#1e2022] text-[#98e4af]' : 'bg-[#98e4af]/20 text-gray-900'}`}>
                   <Mail className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
@@ -416,7 +418,7 @@ export const NewsletterView: React.FC<{
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
-                <span className="hidden sm:inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#98e4af]/20 text-gray-900 dark:text-[#98e4af]">
+                <span className="hidden sm:inline-block px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#98e4af]/20 text-gray-900 dark:text-[#98e4af]">
                   Subscribed
                 </span>
                 {onRemove && (

@@ -1,24 +1,29 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Sidebar } from "@/components/seller/new-design/Sidebar"
 import { RailFlyoutPortal, useRailAnchoredFlyout } from "@/components/rail-flyout-portal"
 import { useSellerNav } from "@/contexts/providers/seller-nav-context"
 import { useThemeContext } from "@/contexts/providers/theme-context"
-import { useAuth } from "@/contexts/providers/auth-context"
 
 /**
- * Seller sidebar flyout — opens on click of the rail's Seller button, aligned
- * vertically with that button, and stays pinned until clicking outside or
- * pressing Escape. Selecting any tab routes directly to `/seller` (or guides
- * unauthenticated users straight to `/login?next=/seller`).
+ * Seller sidebar flyout — opens on hover over the rail's Seller button,
+ * stays open while the pointer is inside the flyout, and routes straight to
+ * `/seller` (or `/login?next=/seller&reason=seller` when logged out).
  */
 export function SellerFlyout() {
-  const { flyoutOpen, setFlyoutOpen, sellerTab, setSellerTab } = useSellerNav()
+  const {
+    flyoutOpen,
+    setFlyoutOpen,
+    cancelCloseFlyout,
+    scheduleCloseFlyout,
+    sellerTab,
+    setSellerTab,
+  } = useSellerNav()
   const { isDarkMode } = useThemeContext()
-  const { user } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
 
   const position = useRailAnchoredFlyout(flyoutOpen)
 
@@ -54,20 +59,38 @@ export function SellerFlyout() {
       left={position?.left ?? null}
       label="seller"
     >
-      <div className="block rounded-[22px] bg-[var(--popover)] shadow-[0_18px_60px_rgba(0,0,0,0.35)] ring-1 ring-[var(--border-color)] overflow-hidden animate-in fade-in slide-in-from-left-2 duration-150">
-        <Sidebar
-          activeTab={sellerTab}
-          onTabChange={(tab) => {
-            setSellerTab(tab)
-            setFlyoutOpen(false)
-            if (!user) {
+      {/* Invisible left bridge (-ml-3 pl-3) keeps hover continuous between sidebar and flyout */}
+      <div
+        className="-ml-3 pl-3"
+        onMouseEnter={cancelCloseFlyout}
+        onMouseLeave={scheduleCloseFlyout}
+      >
+        <div className="block rounded-[22px] bg-[var(--popover)] shadow-[0_18px_60px_rgba(0,0,0,0.35)] ring-1 ring-[var(--border-color)] overflow-hidden animate-in fade-in slide-in-from-left-2 duration-150">
+          <Sidebar
+            activeTab={sellerTab}
+            onTabChange={(tab) => {
+              setSellerTab(tab)
+              setFlyoutOpen(false)
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("start-delivery-loading", {
+                    detail: {
+                      message: `Opening ${tab}`,
+                    },
+                  })
+                )
+              }
+              if (pathname === "/seller") {
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
+                }, 220)
+                return
+              }
               router.push("/seller")
-              return
-            }
-            router.push("/seller")
-          }}
-          isDarkMode={isDarkMode}
-        />
+            }}
+            isDarkMode={isDarkMode}
+          />
+        </div>
       </div>
     </RailFlyoutPortal>
   )

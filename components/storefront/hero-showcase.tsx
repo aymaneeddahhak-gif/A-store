@@ -1,8 +1,9 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { motion, AnimatePresence, type Variants } from "motion/react"
-import { Truck } from "lucide-react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Image from "next/image"
+import { motion, AnimatePresence } from "motion/react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCatalog } from "@/contexts/providers/catalog-context"
 import { toHeroItem } from "@/components/storefront/product-adapter"
@@ -10,28 +11,30 @@ import { CardMedia } from "@/components/product/card-media"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
 import type { HeroProductItem } from "@/lib/storefront/types"
 
-/**
- * Full-width moving showcase. Five real catalog products sit side by side in
- * a row; the center card is dominant and wider, the flanking cards are scaled
- * down with deep shadows and stay as still images until rotation brings them
- * to the center. The center card's clip is buffered by the section-level
- * preloaders BEFORE the product ever reaches the center, so it starts playing
- * the instant the card arrives — no blank flash (the product photo shows
- * through until the first frame is decodable). Rotation holds each product in
- * the center long enough for the clip to actually play.
- */
+/** How long each product holds center focus before switching to the next. */
+const CENTER_HOLD_MS = 3500
 
-/** How long each product holds the center card before rotating on. */
-const CENTER_HOLD_MS = 6000
+type SlotPosition = -1 | 0 | 1
+
+interface VisibleHeroSlot {
+  key: string
+  item: HeroProductItem
+  offset: SlotPosition
+}
+
+/**
+ * Full-viewport depth-of-field floating product showcase:
+ * - Top bar holds Left/Right switch buttons around the active product name.
+ * - Nothing renders below the moving carousel.
+ * - Center product is enlarged and autoplays its showcase video on arrival;
+ *   flanking blurred neighbors glide into focus when clicked, dragged, or auto-switched.
+ */
 export const HeroShowcase: React.FC = () => {
   const router = useRouter()
   const { products } = useCatalog()
   const reducedMotion = useReducedMotion()
-  const [preloadReady, setPreloadReady] = useState(false)
 
-  const items = React.useMemo(() => {
-    // Admin-pinned products take the stage when any exist; otherwise the
-    // whole catalog rotates as before.
+  const items = useMemo(() => {
     const featured = products.filter((p) => p.featured)
     return (featured.length > 0 ? featured : products).map(toHeroItem)
   }, [products])
@@ -39,302 +42,287 @@ export const HeroShowcase: React.FC = () => {
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [direction, setDirection] = useState<1 | -1>(1)
+  const [paused, setPaused] = useState(false)
+  const [preloadReady, setPreloadReady] = useState(false)
+  const draggedRef = useRef(false)
 
-  // Derive 5 distinct visible products across the full web width
-  const farPrev = items[(currentIndex - 2 + total) % total]
-  const prev = items[(currentIndex - 1 + total) % total]
-  const current = items[currentIndex]
-  const next = items[(currentIndex + 1) % total]
-  const farNext = items[(currentIndex + 2 + total) % total]
+  const safeIndex = total > 0 ? currentIndex % total : 0
+  const current = items[safeIndex]
+  const nextItem = total > 1 ? items[(safeIndex + 1) % total] : undefined
 
-  // Only preload the single upcoming slide's video instead of all 10 MP4s at once
-  const preloadVideos = React.useMemo(
-    () => (next?.video ? [next.video] : []),
-    [next?.video]
-  )
+  const goPrev = useCallback(() => {
+    if (total <= 1) return
+    setDirection(-1)
+    setCurrentIndex((prev) => (prev - 1 + total) % total)
+  }, [total])
 
-  // Delay background video preloading so it never competes with initial LCP
+  const goNext = useCallback(() => {
+    if (total <= 1) return
+    setDirection(1)
+    setCurrentIndex((prev) => (prev + 1) % total)
+  }, [total])
+
+  // Delay background preloading of the next slide's video so initial LCP stays fast
   useEffect(() => {
     const timer = window.setTimeout(() => setPreloadReady(true), 1500)
     return () => window.clearTimeout(timer)
   }, [])
 
-  // Auto rotation pauses when tab is hidden or reduced-motion is enabled
+  // Auto-advance (pauses while hovered, hidden, or reduced-motion)
   useEffect(() => {
-    if (total === 0 || reducedMotion) return
-    const interval = setInterval(() => {
+    if (total <= 1 || paused || reducedMotion) return
+    const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return
       setDirection(1)
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % total)
+      setCurrentIndex((prev) => (prev + 1) % total)
     }, CENTER_HOLD_MS)
+    return () => window.clearInterval(timer)
+  }, [total, paused, reducedMotion])
 
-    return () => clearInterval(interval)
-  }, [total, reducedMotion])
+  // Keyboard arrow navigation when on storefront
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      if (e.key === "ArrowLeft") goPrev()
+      else if (e.key === "ArrowRight") goNext()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [goPrev, goNext])
+
+  // Prefetch center & adjacent detail routes for instant click-through
+  useEffect(() => {
+    if (!current) return
+    router.prefetch(`/product/${current.id}`)
+    if (total > 1 && nextItem) {
+      router.prefetch(`/product/${nextItem.id}`)
+    }
+  }, [current, nextItem, router, total])
+
+  const visibleSlots: VisibleHeroSlot[] = useMemo(() => {
+    if (total === 0 || !current) return []
+    if (total === 1) {
+      return [{ key: `center-${current.id}`, item: current, offset: 0 }]
+    }
+    const prevItem = items[(safeIndex - 1 + total) % total]
+    const upcoming = items[(safeIndex + 1) % total]
+    if (total === 2) {
+      return [
+        { key: `prev-${prevItem.id}`, item: prevItem, offset: -1 },
+        { key: `center-${current.id}`, item: current, offset: 0 },
+        { key: `next-${upcoming.id}`, item: upcoming, offset: 1 },
+      ]
+    }
+    // Key by stable item.id when total >= 3 so Motion morphs positions smoothly
+    return [
+      { key: prevItem.id, item: prevItem, offset: -1 },
+      { key: current.id, item: current, offset: 0 },
+      { key: upcoming.id, item: upcoming, offset: 1 },
+    ]
+  }, [current, items, safeIndex, total])
 
   if (total === 0 || !current) return null
 
-  const handlePrev = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setDirection(-1)
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + total) % total)
-  }
-
-  const handleNext = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setDirection(1)
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % total)
-  }
-
-  const openProduct = (item: HeroProductItem) => router.push(`/product/${item.id}`)
-
-  // Snappy horizontal spring sliding animation
-  const slideVariants: Variants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? 100 : -100,
-      opacity: 0.35,
-      scale: 0.94,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-      scale: 1,
-      transition: {
-        x: { type: "spring", stiffness: 380, damping: 30 },
-        opacity: { duration: 0.16 },
-        scale: { duration: 0.16 },
-      },
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? -100 : 100,
-      opacity: 0.35,
-      scale: 0.94,
-      transition: {
-        x: { type: "spring", stiffness: 380, damping: 30 },
-        opacity: { duration: 0.14 },
-        scale: { duration: 0.14 },
-      },
-    }),
+  const openProduct = (item: HeroProductItem) => {
+    if (draggedRef.current) return
+    router.push(`/product/${item.id}`)
   }
 
   return (
     <section
       id="hero-showcase-section"
-      className="relative w-full overflow-hidden py-8 sm:py-12 md:py-14 select-none"
+      aria-label="Featured products showcase"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      className="h-[calc(100svh-96px)] sm:h-[calc(100svh-120px)] lg:h-[calc(100svh-136px)] min-h-[440px] flex flex-col items-center justify-center px-4 sm:px-8 pb-2 relative w-full overflow-x-clip select-none"
     >
-      {/* Warm EVERY showcase clip (one hidden <video> per product video) so
-          the center card plays the instant its product arrives instead of
-          buffering on a blank card. Keyed by src so the elements persist
-          across rotations and the cache is never thrown away. */}
-      {preloadReady && <HeroVideoPreloaders videos={preloadVideos} />}
-      {/* Prefetch the current product's detail route too, so clicking the
-          center card opens the page without a server-render wait. */}
-      <CenterRoutePrefetcher id={current.id} router={router} />
-      {/* Section heading */}
-      <div className="w-full max-w-[1750px] mx-auto px-4 sm:px-8 lg:px-12 pb-6">
-        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-          Handpicked for you
-        </p>
-        <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight text-[var(--foreground)] uppercase">
-          Top Products
+      {/* Off-screen preloader warms the next slide's clip metadata before it reaches center */}
+      {preloadReady && !reducedMotion && nextItem?.video && (
+        <div aria-hidden className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
+          <video key={nextItem.video} src={nextItem.video} muted playsInline preload="metadata" tabIndex={-1} />
+        </div>
+      )}
+
+      {/* TOP-RIGHT VERTICAL SWITCH BUTTONS (compact close stack like old filter arrows) */}
+      <div className="absolute top-2 right-4 sm:right-8 z-30 flex flex-col items-center gap-1">
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={total <= 1}
+          aria-label="Previous product"
+          className="w-7 h-7 rounded-full bg-white border border-[#e7e0d5] hover:bg-[#f5f0e8] flex items-center justify-center text-[#5e564c] transition-all shadow-2xs cursor-pointer dark:bg-white/10 dark:border-white/10 dark:hover:bg-white/15 dark:text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={total <= 1}
+          aria-label="Next product"
+          className="w-7 h-7 rounded-full bg-white border border-[#e7e0d5] hover:bg-[#f5f0e8] flex items-center justify-center text-[#5e564c] transition-all shadow-2xs cursor-pointer dark:bg-white/10 dark:border-white/10 dark:hover:bg-white/15 dark:text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* CENTERED ACTIVE PRODUCT NAME */}
+      <div className="relative z-20 w-full max-w-[680px] flex items-center justify-center px-2 mb-2 shrink-0">
+        <h2 className="font-sans text-base sm:text-lg font-bold text-[#162020] dark:text-[var(--foreground)] tracking-tight leading-snug text-center truncate">
+          {current.name}
         </h2>
       </div>
-      {/* MULTI-PRODUCT SIDE-BY-SIDE TRACK — one flex row, center card widest */}
-      <div className="relative w-full max-w-[1750px] mx-auto flex items-center justify-center gap-3 sm:gap-5 lg:gap-6 min-h-[440px] sm:min-h-[510px] md:min-h-[560px] px-4 sm:px-8 lg:px-12 overflow-hidden">
-        {/* 1. FAR-LEFT CARD: Smaller with deeper shadow */}
-        <HeroSideCard
-          item={farPrev}
-          onClick={handlePrev}
-          className="hidden 2xl:block relative w-[220px] h-[290px] rounded-[22px] overflow-hidden border border-white/60 shadow-[0_44px_85px_-10px_rgba(0,0,0,0.85),0_20px_42px_-8px_rgba(0,0,0,0.6)] z-0 opacity-50 bg-white shrink-0"
-        />
 
-        {/* 2. INNER-LEFT CARD: Scaled smaller with intense deep shadow */}
-        <HeroSideCard
-          item={prev}
-          priority
-          onClick={handlePrev}
-          className="hidden md:block relative w-[260px] lg:w-[310px] h-[340px] lg:h-[380px] rounded-[24px] overflow-hidden border border-white/70 shadow-[0_50px_95px_-12px_rgba(0,0,0,0.9),0_24px_48px_-10px_rgba(0,0,0,0.65)] z-10 opacity-75 bg-white shrink-0"
-        />
+      {/* FLOATING DEPTH-OF-FIELD 3-ITEM STAGE */}
+      <motion.div
+        className="relative w-full max-w-[1480px] flex-1 flex items-center justify-center"
+        drag={total > 1 ? "x" : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.14}
+        onDragStart={() => {
+          draggedRef.current = true
+        }}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -50 || info.velocity.x < -280) {
+            goNext()
+          } else if (info.offset.x > 50 || info.velocity.x > 280) {
+            goPrev()
+          }
+          window.setTimeout(() => {
+            draggedRef.current = false
+          }, 90)
+        }}
+      >
+        <AnimatePresence initial={false} custom={direction}>
+          {visibleSlots.map(({ key, item, offset }) => {
+            const isCenter = offset === 0
+            const xTarget = offset === -1 ? "-112%" : offset === 1 ? "112%" : "0%"
 
-        {/* 3. CENTER CARD: DOMINANT PROMINENT CENTER DISPLAY */}
-        <div className="relative z-20 w-full max-w-[440px] sm:max-w-[580px] md:max-w-[660px] shrink-0">
-          <AnimatePresence mode="wait" custom={direction}>
-            <CenterCard
-              key={current.id}
-              item={current}
-              direction={direction}
-              variants={slideVariants}
-              onSelect={openProduct}
-            />
-          </AnimatePresence>
-        </div>
+            return (
+              <motion.div
+                key={key}
+                custom={direction}
+                initial={{
+                  x: direction > 0 ? "180%" : "-180%",
+                  scale: 0.48,
+                  opacity: 0,
+                  filter: "blur(14px)",
+                }}
+                animate={{
+                  x: xTarget,
+                  scale: isCenter ? 1 : 0.66,
+                  opacity: isCenter ? 1 : 0.6,
+                  filter: isCenter ? "blur(0px)" : "blur(8px)",
+                  zIndex: isCenter ? 20 : 10,
+                }}
+                exit={{
+                  x: direction > 0 ? "-180%" : "180%",
+                  scale: 0.48,
+                  opacity: 0,
+                  filter: "blur(14px)",
+                  zIndex: 0,
+                }}
+                transition={
+                  reducedMotion
+                    ? { duration: 0.15 }
+                    : {
+                        type: "spring",
+                        stiffness: 220,
+                        damping: 26,
+                        mass: 0.9,
+                      }
+                }
+                onClick={() => {
+                  if (offset === -1) goPrev()
+                  else if (offset === 1) goNext()
+                  else openProduct(item)
+                }}
+                className={`absolute flex flex-col items-center justify-center cursor-pointer ${
+                  isCenter
+                    ? "w-[min(94vw,520px)] sm:w-[min(78vw,680px)] lg:w-[min(64vw,760px)]"
+                    : "hidden sm:flex w-[260px] sm:w-[340px] lg:w-[430px]"
+                }`}
+                aria-label={
+                  isCenter
+                    ? `View ${item.name}`
+                    : offset === -1
+                      ? `Previous product: ${item.name}`
+                      : `Next product: ${item.name}`
+                }
+              >
+                {/* Flanking neighbor name sits subtly on top */}
+                {!isCenter && (
+                  <div className="w-full mb-2 sm:mb-2.5 text-center px-2">
+                    <p className="font-sans text-xs sm:text-sm font-bold tracking-tight leading-snug text-[var(--foreground)] text-center line-clamp-1">
+                      {item.name}
+                    </p>
+                  </div>
+                )}
 
-        {/* 4. INNER-RIGHT CARD: Scaled smaller with intense deep shadow */}
-        <HeroSideCard
-          item={next}
-          priority
-          onClick={handleNext}
-          className="hidden md:block relative w-[260px] lg:w-[310px] h-[340px] lg:h-[380px] rounded-[24px] overflow-hidden border border-white/70 shadow-[0_50px_95px_-12px_rgba(0,0,0,0.9),0_24px_48px_-10px_rgba(0,0,0,0.65)] z-10 opacity-75 bg-white shrink-0"
-        />
+                {/* Product media: autoplay showcase video when centered, still/cutout on sides */}
+                <div
+                  data-hero-media
+                  className={`relative w-full flex items-center justify-center ${
+                    isCenter
+                      ? "h-[clamp(300px,68svh,560px)]"
+                      : "h-[clamp(210px,46svh,390px)]"
+                  }`}
+                >
+                  {isCenter && item.video ? (
+                    <div className="relative w-full h-full rounded-[32px] overflow-hidden shadow-[0_32px_70px_-16px_rgba(0,0,0,0.34)] bg-white/80 dark:bg-white/5">
+                      <CardMedia
+                        image={item.mainImage}
+                        video={item.video}
+                        alt={item.name}
+                        active
+                        priority
+                        videoOnly
+                        eagerVideo
+                        fallbackToImage
+                        sizes="(max-width: 640px) 94vw, (max-width: 1024px) 78vw, 760px"
+                      />
+                    </div>
+                  ) : item.cutoutImage ? (
+                    <div className="relative w-full h-full p-2">
+                      <Image
+                        src={item.cutoutImage}
+                        alt={item.name}
+                        fill
+                        priority={isCenter}
+                        unoptimized
+                        draggable={false}
+                        sizes="(max-width: 640px) 94vw, (max-width: 1024px) 78vw, 760px"
+                        className="object-contain pointer-events-none drop-shadow-[0_22px_28px_rgba(0,0,0,0.18)]"
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative w-[90%] h-[92%] rounded-[28px] overflow-hidden shadow-[0_28px_60px_-15px_rgba(0,0,0,0.28)] bg-white/80 dark:bg-white/5">
+                      <Image
+                        src={item.mainImage}
+                        alt={item.name}
+                        fill
+                        priority={isCenter}
+                        unoptimized
+                        draggable={false}
+                        sizes="(max-width: 640px) 86vw, (max-width: 1024px) 72vw, 700px"
+                        className="object-cover pointer-events-none"
+                      />
+                    </div>
+                  )}
+                </div>
 
-        {/* 5. FAR-RIGHT CARD: Smaller with deeper shadow */}
-        <HeroSideCard
-          item={farNext}
-          onClick={handleNext}
-          className="hidden 2xl:block relative w-[220px] h-[290px] rounded-[22px] overflow-hidden border border-white/60 shadow-[0_44px_85px_-10px_rgba(0,0,0,0.85),0_20px_42px_-8px_rgba(0,0,0,0.6)] z-0 opacity-50 bg-white shrink-0"
-        />
-      </div>
+                {/* Soft elliptical ground shadow beneath the center floating product */}
+                {isCenter && (
+                  <div
+                    aria-hidden
+                    className="w-[260px] sm:w-[360px] h-4 sm:h-5 rounded-full bg-black/20 dark:bg-black/60 blur-xl mt-1.5 pointer-events-none shrink-0"
+                  />
+                )}
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
+      </motion.div>
     </section>
-  )
-}
-
-/**
- * Off-screen clips that buffer EVERY showcase product's video ahead of its
- * center-slot rotation. One stable element per distinct video (keyed by src)
- * keeps the browser cache warm — a preloaded clip plays instantly when its
- * card takes the center.
- */
-function HeroVideoPreloaders({ videos }: { videos: string[] }) {
-  return (
-    <div aria-hidden className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
-      {videos.map((video) => (
-        <video key={video} src={video} muted playsInline preload="auto" tabIndex={-1} />
-      ))}
-    </div>
-  )
-}
-
-/** Prefetches the center product's detail route as soon as it arrives. */
-function CenterRoutePrefetcher({
-  id,
-  router,
-}: {
-  id: string | number
-  router: ReturnType<typeof useRouter>
-}) {
-  useEffect(() => {
-    router.prefetch(`/product/${id}`)
-  }, [id, router])
-  return null
-}
-
-/**
- * Flanking card — still image only. The clip plays once the card's product
- * rotates into the center position, so side cards never load video.
- */
-function HeroSideCard({
-  item,
-  priority = false,
-  onClick,
-  className,
-}: {
-  item: HeroProductItem
-  priority?: boolean
-  onClick: (e?: React.MouseEvent) => void
-  className: string
-}) {
-  const router = useRouter()
-
-  return (
-    <div
-      onClick={onClick}
-      onPointerEnter={(e) => {
-        if (e.pointerType === "mouse") router.prefetch(`/product/${item.id}`)
-      }}
-      className={`cursor-pointer transition-all duration-300 group hover:scale-[1.02] ${className}`}
-    >
-      <CardMedia
-        image={item.mainImage}
-        video={null}
-        alt={item.name}
-        active={false}
-        priority={priority}
-        sizes="310px"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
-      <div className="absolute bottom-0 inset-x-0 p-3 text-center z-10">
-        <h4 className="text-xs font-extrabold text-white uppercase tracking-tight line-clamp-1 drop-shadow-md">
-          {item.name}
-        </h4>
-      </div>
-    </div>
-  )
-}
-
-/** Center card — the dominant display with spring slide transitions. The
- * showcase clip is the whole card (no still image) and plays for as long as
- * the product holds the center. */
-function CenterCard({
-  item,
-  direction,
-  variants,
-  onSelect,
-}: {
-  item: HeroProductItem
-  direction: 1 | -1
-  variants: Variants
-  onSelect: (item: HeroProductItem) => void
-}) {
-  const router = useRouter()
-
-  return (
-    <motion.div
-      key={item.id}
-      custom={direction}
-      variants={variants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      onClick={() => onSelect(item)}
-      onPointerEnter={(e) => {
-        if (e.pointerType === "mouse") router.prefetch(`/product/${item.id}`)
-      }}
-      className="relative w-full h-[470px] sm:h-[540px] md:h-[590px] rounded-[36px] overflow-hidden bg-white shadow-[0_35px_80px_-15px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.9)] border-2 border-white flex flex-col justify-end cursor-pointer group"
-    >
-      <CardMedia
-        image={item.mainImage}
-        video={item.video}
-        alt={item.name}
-        active
-        priority
-        videoOnly
-        eagerVideo
-        fallbackToImage
-        sizes="(max-width: 640px) 90vw, (max-width: 1024px) 60vw, 660px"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
-
-      {/* Top Discount Tag & Fast Delivery Badge */}
-      <div className="absolute top-5 inset-x-5 flex items-center justify-between z-10">
-        {item.discountBadge ? (
-          <span className="bg-black/90 text-white text-xs font-black uppercase px-3 py-1 rounded-full backdrop-blur-md tracking-wider border border-white/20 shadow-md">
-            {item.discountBadge}
-          </span>
-        ) : (
-          <div />
-        )}
-        <span className="bg-white/95 text-gray-900 text-[11px] font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1 backdrop-blur-md">
-          <Truck className="w-3 h-3 text-emerald-600" />
-          {item.shipping}
-        </span>
-      </div>
-
-      {/* Bottom Content Area: Name, Price & Slashed Comparison */}
-      <div className="relative z-10 p-7 sm:p-8 text-center">
-        <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] mb-2">
-          {item.name}
-        </h3>
-
-        <div className="flex items-center justify-center gap-2.5">
-          <span className="text-xl sm:text-2xl font-black text-white drop-shadow-md">
-            {item.price}
-          </span>
-          {item.originalPrice && (
-            <span className="text-sm sm:text-base font-bold text-gray-300 line-through drop-shadow-sm">
-              {item.originalPrice}
-            </span>
-          )}
-        </div>
-      </div>
-    </motion.div>
   )
 }

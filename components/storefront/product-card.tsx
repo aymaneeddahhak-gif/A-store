@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Heart, Truck, ShoppingCart } from "lucide-react"
@@ -15,6 +15,18 @@ interface ProductCardProps {
   onToggleWishlist?: (id: string) => void
   onOpenProduct?: (id: string) => void
   onAddToCart?: (id: string) => void
+}
+
+function NotchFillet({ className }: { className: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden
+      className={`w-5 h-5 text-[#eff4f4] dark:text-[var(--card)] pointer-events-none ${className}`}
+    >
+      <path d="M20 0 H0 A20 20 0 0 1 20 20 Z" fill="currentColor" />
+    </svg>
+  )
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -44,11 +56,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const liked = product.isLiked ?? false
   const soldOut = (product.stock ?? 1) <= 0
   const isPremium = Boolean(product.isPremium)
-  const heartPosClass = isPremium
-    ? discountPercent > 0
-      ? "top-4 right-[6.25rem] sm:right-[7.25rem]"
-      : "top-4 right-4"
-    : "top-4 left-4"
+
+  const footerChips = useMemo(() => {
+    const raw = [
+      categoryLabel,
+      `${displayRating} (${reviewsCount})`,
+      product.specs[0]?.value,
+      product.specs[1]?.value,
+    ].filter((v): v is string => Boolean(v && v.trim()))
+    return Array.from(new Set(raw)).slice(0, 4)
+  }, [categoryLabel, displayRating, reviewsCount, product.specs])
 
   const openProduct = () => onOpenProduct?.(product.id)
   const handleAddToCart = () => {
@@ -58,14 +75,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   }
 
   return (
-    <article className="group relative w-full max-w-sm sm:max-w-md bg-white rounded-3xl overflow-visible border border-neutral-200 shadow-sm hover:shadow-xl transition-all duration-300 font-sans dark:bg-[var(--card)] dark:border-[var(--border-color)]">
+    <article className="group relative w-full max-w-sm sm:max-w-md bg-[#eff4f4] dark:bg-[var(--card)] rounded-[30px] p-2.5 sm:p-3 overflow-visible border border-[#e0e9e9] dark:border-[var(--border-color)] shadow-[0_6px_24px_-8px_rgba(31,45,45,0.08)] hover:shadow-[0_14px_34px_-10px_rgba(31,45,45,0.16)] transition-all duration-300 font-sans flex flex-col">
       {isPremium && <span aria-hidden className="premium-corner-ribbon" />}
 
-      {/* 1. Image Area with Floating Badges — Classic Square Aspect Ratio */}
-      <div className="relative w-full aspect-square bg-[#FAF7F2] rounded-t-3xl overflow-hidden dark:bg-white/5">
+      {/* 1. Framed Media Stage: Top-Left Offer, Top-Right Concave Price Notch, Bottom Status Strip */}
+      <div className="relative w-full aspect-[4/3] bg-[#f8fbfb] dark:bg-white/5 rounded-[22px] overflow-hidden">
         <Link
           href={productHref}
-          prefetch={true}
+          prefetch={false}
           className={`relative block w-full h-full flex items-center justify-center ${
             onOpenProduct ? "cursor-pointer" : ""
           }`}
@@ -77,7 +94,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           }}
           onPointerLeave={() => setHovered(false)}
         >
-          <div className="w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out">
+          <div className="relative w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out">
             <CardMedia
               image={product.imageUrl}
               video={product.video ?? null}
@@ -88,47 +105,68 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             />
           </div>
 
-          {/* Circular Discount Badge (#F05423) */}
+          {/* Top-Left Offer Discount Badge (#F05423) */}
           {discountPercent > 0 && (
             <div
-              className="absolute top-4 right-4 z-10 flex flex-col items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#F05423] text-white text-center select-none"
+              className={`absolute top-3 ${
+                isPremium ? "left-[92px]" : "left-3"
+              } z-10 flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#F05423] text-white text-center select-none`}
               style={{ boxShadow: "0 6px 18px rgba(240, 84, 35, 0.4)" }}
             >
-              <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider leading-none mb-0.5">
+              <span className="text-[8px] font-semibold uppercase tracking-wider leading-none mb-0.5">
                 UP TO
               </span>
-              <span className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-none my-0.5">
+              <span className="text-lg sm:text-xl font-extrabold tracking-tight leading-none my-0.5">
                 {discountPercent}%
               </span>
-              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none mt-0.5">
+              <span className="text-[8px] font-bold uppercase tracking-wider leading-none mt-0.5">
                 OFF
               </span>
             </div>
           )}
 
-          {/* Bottom Tag Overlay */}
-          <div className="absolute bottom-3 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
+          {/* Bottom Integrated Delivery / Offer Banner */}
+          <div
+            className={`absolute inset-x-0 bottom-0 z-10 px-3 py-1.5 text-center text-[11px] font-semibold tracking-wide flex items-center justify-center gap-1.5 pointer-events-none ${
+              soldOut
+                ? "bg-neutral-900/95 text-white"
+                : product.freeShipping
+                  ? "bg-[#567a59]/95 dark:bg-emerald-600/95 text-white"
+                  : discountPercent > 0
+                    ? "bg-neutral-900/90 text-white"
+                    : "bg-neutral-900/85 text-white"
+            }`}
+          >
             {soldOut ? (
-              <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-neutral-900 text-white rounded-md shadow-xs">
-                SOLD OUT
-              </span>
+              <span>Sold Out</span>
+            ) : product.freeShipping ? (
+              <>
+                <Truck className="w-3.5 h-3.5 shrink-0" />
+                <span>{discountPercent > 0 ? "Free Shipping · Limited Time" : "Free Shipping"}</span>
+              </>
             ) : discountPercent > 0 ? (
-              <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-neutral-900/85 text-white rounded-md backdrop-blur-sm shadow-xs">
-                LIMITED TIME
-              </span>
+              <span>Limited Time · Save {discountPercent}%</span>
             ) : (
-              <span />
-            )}
-            {product.freeShipping && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-emerald-600 text-white rounded-md backdrop-blur-sm shadow-xs">
-                <Truck className="w-3 h-3" />
-                FREE SHIPPING
-              </span>
+              <span>Fast Shipping</span>
             )}
           </div>
         </Link>
 
-        {/* Wishlist Heart Button — sibling outside <Link> for valid HTML & a11y */}
+        {/* Top-Right Price in Concave Frame Cutout Notch */}
+        <div className="absolute top-0 right-0 z-20 bg-[#eff4f4] dark:bg-[var(--card)] rounded-bl-[20px] pl-3.5 pr-2.5 pt-1 pb-2 flex items-baseline gap-1.5 pointer-events-none">
+          <NotchFillet className="absolute -left-5 top-0" />
+          <NotchFillet className="absolute right-0 -bottom-5" />
+          <span className="text-lg sm:text-xl font-extrabold tracking-tight text-[#162020] dark:text-[var(--foreground)]">
+            ${formatPrice(product.price)}
+          </span>
+          {product.originalPrice && (
+            <span className="text-[11px] font-semibold text-[#5f7070] dark:text-neutral-400 line-through">
+              ${formatPrice(product.originalPrice)}
+            </span>
+          )}
+        </div>
+
+        {/* Wishlist Heart Button — sibling outside <Link> */}
         <button
           type="button"
           onClick={(e) => {
@@ -137,81 +175,54 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           }}
           aria-label={liked ? `Remove ${product.title} from wishlist` : `Add ${product.title} to wishlist`}
           aria-pressed={liked}
-          className={`absolute ${heartPosClass} z-20 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center text-neutral-600 hover:text-red-500 hover:bg-white transition-colors cursor-pointer`}
+          className="absolute bottom-10 right-2.5 z-20 w-8 h-8 rounded-full bg-white/90 dark:bg-neutral-900/80 backdrop-blur-sm shadow-sm flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-red-500 hover:bg-white transition-colors cursor-pointer"
         >
           <Heart
             className={`w-4 h-4 transition-colors ${
-              liked ? "fill-red-500 text-red-500" : "text-neutral-600"
+              liked ? "fill-red-500 text-red-500" : ""
             }`}
           />
         </button>
       </div>
 
-      {/* 2. Product Details */}
-      <div className="p-5 sm:p-6 bg-white rounded-b-3xl flex flex-col justify-between space-y-3.5 dark:bg-[var(--card)]">
-        <div>
-          <div className="flex items-center justify-between text-xs text-neutral-400 mb-1 font-medium dark:text-[var(--muted-foreground)]">
-            <span className="uppercase tracking-wider font-semibold">{categoryLabel}</span>
-            <span className="text-amber-500 font-semibold flex items-center gap-1">
-              ★ {displayRating} ({reviewsCount})
-            </span>
+      {/* 2. Footer: Title + Action Buttons Row, followed by Compact Pill Chips */}
+      <div className="px-1.5 pt-3 pb-1 flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="min-w-0 flex-1">
+            <h3
+              className={`text-base sm:text-lg font-bold text-[#162020] dark:text-[var(--foreground)] tracking-tight leading-snug line-clamp-1 ${
+                onOpenProduct ? "cursor-pointer" : ""
+              }`}
+              onClick={openProduct}
+            >
+              {product.title}
+            </h3>
+            <p className="text-xs text-[#4d5e5e] dark:text-[var(--muted-foreground)] line-clamp-1 mt-0.5">
+              {product.subtitle}
+            </p>
           </div>
 
-          <h3
-            className={`text-lg sm:text-xl font-bold text-neutral-900 tracking-tight mb-1 dark:text-[var(--foreground)] ${
-              onOpenProduct ? "cursor-pointer" : ""
-            }`}
-            onClick={openProduct}
-          >
-            {product.title}
-          </h3>
-
-          <p className="text-xs sm:text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-3 dark:text-[var(--muted-foreground)]">
-            {product.subtitle}
-          </p>
-        </div>
-
-        {/* 3. Pricing & Cart Action Row */}
-        <div className="pt-3 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-3 dark:border-white/10">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold text-[#F05423] tracking-tight">
-                ${formatPrice(product.price)}
-              </span>
-              {product.originalPrice && (
-                <span className="text-sm sm:text-base font-medium text-neutral-400 line-through">
-                  ${formatPrice(product.originalPrice)}
-                </span>
-              )}
-            </div>
-            {discountPercent > 0 && (
-              <p className="text-[11px] text-neutral-400 font-medium dark:text-[var(--muted-foreground)]">
-                Includes {discountPercent}% discount
-              </p>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Exact Existing Action Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={handleAddToCart}
               disabled={soldOut}
               aria-label={soldOut ? `${product.title} is sold out` : `Add ${product.title} to cart`}
-              className={`p-2.5 rounded-xl border transition-all duration-200 cursor-pointer dark:bg-white/5 dark:border-white/10 dark:text-[var(--foreground)] dark:hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${
+              className={`p-2 rounded-xl border transition-all duration-200 cursor-pointer dark:bg-white/5 dark:border-white/10 dark:text-[var(--foreground)] dark:hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${
                 isAdded
                   ? "bg-emerald-50 border-emerald-300 text-emerald-600"
-                  : "border-neutral-200 hover:border-neutral-900 text-neutral-700 hover:text-neutral-900 bg-neutral-50 active:scale-95"
+                  : "border-[#d4e0e0] hover:border-[#162020] text-[#162020] bg-white/85 hover:bg-white active:scale-95"
               }`}
             >
-              <ShoppingCart className="w-5 h-5" />
+              <ShoppingCart className="w-4 h-4" />
             </button>
 
             {soldOut ? (
               <button
                 type="button"
                 disabled
-                className="px-4 py-2.5 rounded-xl bg-neutral-200 text-neutral-500 text-xs sm:text-sm font-bold tracking-wide whitespace-nowrap transition-all cursor-not-allowed dark:bg-white/10 dark:text-[var(--muted-foreground)]"
+                className="px-3.5 py-2 rounded-xl bg-neutral-200 text-neutral-500 text-xs font-bold tracking-wide whitespace-nowrap transition-all cursor-not-allowed dark:bg-white/10 dark:text-[var(--muted-foreground)]"
               >
                 <span>SOLD OUT</span>
               </button>
@@ -220,7 +231,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 type="button"
                 onClick={openProduct}
                 aria-label={`Shop ${product.title} now`}
-                className="group/shop relative w-[100px] h-[35px] bg-[#222] dark:bg-white dark:text-black rounded-[0.45em] text-center cursor-pointer overflow-hidden transition-colors"
+                className="group/shop relative w-[96px] h-[34px] bg-[#222] dark:bg-white dark:text-black rounded-[0.45em] text-center cursor-pointer overflow-hidden transition-colors"
               >
                 <span className="absolute inset-0 overflow-hidden rounded-[0.45em]">
                   <span className="absolute left-0 w-full h-full top-0 flex items-center justify-center text-[11px] font-bold tracking-wide text-white dark:text-black transition-[top] duration-500 group-hover/shop:top-[-100%]">
@@ -234,6 +245,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             )}
           </div>
         </div>
+
+        {/* Footer Spec / Metadata Pills */}
+        {footerChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {footerChips.map((chip) => (
+              <span
+                key={chip}
+                className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/80 text-[#3c4d4d] dark:bg-white/10 dark:text-neutral-300"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </article>
   )

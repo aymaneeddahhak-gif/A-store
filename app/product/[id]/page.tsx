@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 import ElectricBorderCard from "@/components/electric-border-card"
 import { DetailExperience } from "@/components/product/detail-experience"
-import { toStorefrontProduct } from "@/components/storefront/product-adapter"
+import { getProductVariantConfig, toStorefrontProduct } from "@/components/storefront/product-adapter"
 import { CATEGORIES } from "@/lib/categories"
 import { getProductById, getRelatedProducts } from "@/lib/queries/products"
 import { SITE_URL } from "@/lib/site"
@@ -26,8 +26,9 @@ export default async function ProductDetailPage({ params, searchParams }: Props)
 
   const relatedProducts = await getRelatedProducts(product)
 
-  // Merchandising enrichment (swatches, storefront category) shared with cards.
+  // Merchandising enrichment (swatches, storefront category, variant options) shared with cards.
   const storefront = toStorefrontProduct(product, false)
+  const { colors, variantLabel, variantOptions } = getProductVariantConfig(product)
   const categoryLabel =
     CATEGORIES.find((c) => c.id === storefront.category)?.label ?? product.category
 
@@ -86,7 +87,9 @@ export default async function ProductDetailPage({ params, searchParams }: Props)
           <DetailExperience
             product={product}
             categoryLabel={categoryLabel}
-            colors={storefront.colors ?? []}
+            colors={colors}
+            variantLabel={variantLabel}
+            variantOptions={variantOptions}
             showSizes={storefront.category === "sneakers"}
             editItemId={edit ? product.id : undefined}
           />

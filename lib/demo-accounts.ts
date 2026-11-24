@@ -29,4 +29,12 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "customer@a-store.shop",
     password: "Astore-Customer-2026!",
   },
+  // TEMPORARY: Remove this Admin entry before final production deployment.
+  {
+    id: "demo_admin",
+    label: "Admin",
+    description: "Full store catalog, offers & admin console",
+    email: "admin@a-store.shop",
+    password: "",
+  },
 ]

@@ -1,15 +1,17 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { resetSupabaseCircuit } from "@/lib/supabase-circuit"
 import { useAuth } from "@/contexts/providers/auth-context"
 import { DEMO_ACCOUNTS, type DemoAccountId } from "@/lib/demo-accounts"
 import { demoSessionLoginAction } from "@/lib/actions/demo-login"
+import { isSellerEmail } from "@/lib/seller"
 import type { AuthFeedback, AuthMode } from "@/components/login/types"
 
 function isNetworkOrOfflineError(msg: string): boolean {
-  return /fetch failed|network|circuit open|paused or unreachable|supabase_offline|unreachable|timed? ?out|failed to fetch|enotfound|offline demo/i.test(
+  return /fetch failed|network|circuit open|paused or unreachable|supabase_offline|supabase auth offline|supabase auth unavailable|demo session|unreachable|timed? ?out|failed to fetch|enotfound|offline demo/i.test(
     msg
   )
 }
@@ -24,6 +26,7 @@ function resolveNextPath(): string {
 export function useAuthFlow() {
   const router = useRouter()
   const { user, authLoading, signInDemo } = useAuth()
+  const redirectingRef = useRef(false)
 
   const [mode, setMode] = useState<AuthMode>("login")
   const [showPassword, setShowPassword] = useState(false)
@@ -35,8 +38,19 @@ export function useAuthFlow() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
 
+  // Only auto-redirect already-signed-in visitors who land on /login directly;
+  // allow signed-in non-sellers to stay on /login when switching to a Seller account.
   useEffect(() => {
-    if (!authLoading && user) router.replace(resolveNextPath())
+    if (!authLoading && user && !redirectingRef.current) {
+      const params =
+        typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
+      const target = resolveNextPath()
+      const wantsSwitch = params?.get("switch") === "1"
+      const customerSeekingSeller = target === "/seller" && !isSellerEmail(user.email)
+      if (wantsSwitch || customerSeekingSeller) return
+      redirectingRef.current = true
+      router.replace(target)
+    }
   }, [user, authLoading, router])
 
   const switchMode = useCallback((newMode: AuthMode) => {
@@ -49,6 +63,7 @@ export function useAuthFlow() {
   const signInWithPassword = useCallback(
     async (signInEmail: string, signInPassword: string, fallbackName?: string) => {
       const target = resolveNextPath()
+      resetSupabaseCircuit()
       try {
         const { error } = await supabase.auth.signInWithPassword({
           email: signInEmail,
@@ -56,18 +71,22 @@ export function useAuthFlow() {
         })
 
         if (!error) {
+          redirectingRef.current = true
           router.push(target)
+          router.refresh()
           return
         }
 
         if (isNetworkOrOfflineError(error.message)) {
           const cleanEmail = signInEmail.trim().toLowerCase()
+          redirectingRef.current = true
           signInDemo({
             id: cleanEmail.includes("admin") ? "demo-admin-role-id" : `demo-${cleanEmail.split("@")[0]}`,
             email: cleanEmail,
             fullName: fallbackName || cleanEmail.split("@")[0] || "Demo User",
           })
           router.push(target)
+          router.refresh()
           return
         }
 
@@ -92,12 +111,14 @@ export function useAuthFlow() {
         const msg = err instanceof Error ? err.message : "Network error"
         if (isNetworkOrOfflineError(msg)) {
           const cleanEmail = signInEmail.trim().toLowerCase()
+          redirectingRef.current = true
           signInDemo({
             id: cleanEmail.includes("admin") ? "demo-admin-role-id" : `demo-${cleanEmail.split("@")[0]}`,
             email: cleanEmail,
             fullName: fallbackName || cleanEmail.split("@")[0] || "Demo User",
           })
           router.push(target)
+          router.refresh()
           return
         }
         setFeedback({ type: "error", message: msg })
@@ -116,6 +137,7 @@ export function useAuthFlow() {
       return
     }
     const target = resolveNextPath()
+    resetSupabaseCircuit()
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -127,12 +149,14 @@ export function useAuthFlow() {
       if (error) {
         if (isNetworkOrOfflineError(error.message)) {
           const cleanEmail = email.trim().toLowerCase()
+          redirectingRef.current = true
           signInDemo({
             id: `demo-${cleanEmail.split("@")[0]}`,
             email: cleanEmail,
             fullName: username.trim() || cleanEmail.split("@")[0] || "Shopper",
           })
           router.push(target)
+          router.refresh()
           return
         }
         if (error.message.includes("Password should be")) {
@@ -156,7 +180,9 @@ export function useAuthFlow() {
       }
 
       if (data.session) {
+        redirectingRef.current = true
         router.push(target)
+        router.refresh()
       } else {
         setSignupSuccess(true)
         setFeedback(null)
@@ -165,12 +191,14 @@ export function useAuthFlow() {
       const msg = err instanceof Error ? err.message : "Network error"
       if (isNetworkOrOfflineError(msg)) {
         const cleanEmail = email.trim().toLowerCase()
+        redirectingRef.current = true
         signInDemo({
           id: `demo-${cleanEmail.split("@")[0]}`,
           email: cleanEmail,
           fullName: username.trim() || cleanEmail.split("@")[0] || "Shopper",
         })
         router.push(target)
+        router.refresh()
         return
       }
       setFeedback({ type: "error", message: msg })
@@ -192,7 +220,7 @@ export function useAuthFlow() {
         else await handleSignUp()
       } finally {
         setIsLoading(false)
-        if (typeof window !== "undefined") {
+        if (!redirectingRef.current && typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
         }
       }
@@ -238,11 +266,17 @@ export function useAuthFlow() {
       setFeedback(null)
       setIsLoading(true)
       const queryNext = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null
-      // Auto-guide Normal User to /profile and Demo Seller to /seller
+      // Auto-guide Normal User to /profile and Demo Seller to /seller;
+      // never send a Normal User straight to the seller-only gate after login.
       const defaultTarget = accountId === "customer" ? "/profile" : "/seller"
-      const target = queryNext && queryNext.startsWith("/") && !queryNext.startsWith("//") && queryNext !== "/"
-        ? queryNext
-        : defaultTarget
+      const target =
+        queryNext &&
+        queryNext.startsWith("/") &&
+        !queryNext.startsWith("//") &&
+        queryNext !== "/" &&
+        !(accountId === "customer" && queryNext.startsWith("/seller"))
+          ? queryNext
+          : defaultTarget
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("start-delivery-loading", {
           detail: { label: target === "/profile" ? "Your Profile & Orders" : "Seller Dashboard" }
@@ -251,11 +285,21 @@ export function useAuthFlow() {
       try {
         const res = await demoSessionLoginAction(accountId)
         if (res.ok && res.user) {
+          redirectingRef.current = true
           signInDemo(res.user)
           router.push(target)
+          router.refresh()
           return
         }
         setFeedback({ type: "error", message: res.error ?? "Demo sign-in failed." })
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
+        }
+      } catch {
+        setFeedback({ type: "error", message: "Demo sign-in failed. Please try again." })
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
+        }
       } finally {
         setIsLoading(false)
       }

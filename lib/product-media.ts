@@ -83,10 +83,11 @@ export function getProductVideo(product: Product): string | null {
 
 /**
  * Full media list for the detail gallery: the primary image, any extra
- * images, then the showcase video. Duplicate sources are dropped.
+ * images (including per-color variant images), then the showcase video.
+ * Duplicate sources are dropped.
  */
-export function getProductMedia(product: Product): MediaItem[] {
-  const images = [product.image, ...(product.images ?? [])].filter(
+export function getProductMedia(product: Product, extraImages: string[] = []): MediaItem[] {
+  const images = [product.image, ...(product.images ?? []), ...extraImages].filter(
     (src, i, all) => Boolean(src) && all.indexOf(src) === i
   )
   const media: MediaItem[] = images.map((src) => ({ kind: "image", src }))

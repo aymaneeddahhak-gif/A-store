@@ -3,12 +3,19 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createResilientFetch, isSupabaseOffline } from "@/lib/supabase-circuit"
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
   const requestHeaders = new Headers(request.headers)
-  requestHeaders.set("x-pathname", request.nextUrl.pathname)
+  requestHeaders.set("x-pathname", pathname)
 
   let response = NextResponse.next({
     request: { headers: requestHeaders },
   })
+
+  // Never let Supabase session refresh slow down or block navigating to /login.
+  // On /seller, skip Supabase unless an active Supabase auth cookie is present.
+  if (pathname === "/login") {
+    return response
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

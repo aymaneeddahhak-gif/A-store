@@ -9,6 +9,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react"
+import { usePathname } from "next/navigation"
 import type { Product } from "@/lib/types"
 import { useToast } from "@/contexts/toast-context"
 import {
@@ -58,14 +59,19 @@ const CatalogContext = createContext<CatalogContextValue | undefined>(undefined)
 export function CatalogProvider({
   children,
   productsPromise,
+  categoriesPromise,
 }: {
   children: ReactNode
   /** Server-started catalog read, streamed in — the UI never waits for it. */
   productsPromise?: Promise<Product[]>
+  /** Server-started categories read, streamed in without a mount POST action. */
+  categoriesPromise?: Promise<{ id: string; label: string }[]>
 }) {
   const { showToast } = useToast()
+  const pathname = usePathname()
+  const skipSupabaseBackground = pathname === "/login"
 
-  // Starts empty — CatalogSeed (below) fills it from the streamed server
+  // Starts empty — PromiseSeed (below) fills it from the streamed server
   // promise, so the shell renders instantly while Supabase responds.
   const [products, setProducts] = useState<Product[]>([])
   /**
@@ -81,6 +87,12 @@ export function CatalogProvider({
   const [categories, setCategories] = useState<{ id: string; label: string }[]>([
     ...DEFAULT_CATEGORIES,
   ])
+
+  const seedCategories = useCallback((rows: { id: string; label: string }[]) => {
+    if (rows.length > 0) {
+      setCategories(mergeCategories(DEFAULT_CATEGORIES, rows))
+    }
+  }, [])
 
   const refreshCategories = useCallback(async () => {
     const res = await listCategoriesAction()
@@ -102,9 +114,6 @@ export function CatalogProvider({
     [refreshCategories]
   )
 
-  useEffect(() => {
-    void refreshCategories()
-  }, [refreshCategories])
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQueryState] = useState("")
 
@@ -133,7 +142,7 @@ export function CatalogProvider({
   // realtime publication (see sql/catalog-realtime.sql); until then this is a
   // harmless open subscription and every mutation refreshes locally anyway.
   useEffect(() => {
-    if (isSupabaseOffline()) return
+    if (skipSupabaseBackground || isSupabaseOffline()) return
     const channel = browserSupabase
       .channel("catalog-live")
       .on(
@@ -155,7 +164,7 @@ export function CatalogProvider({
     return () => {
       void browserSupabase.removeChannel(channel)
     }
-  }, [refreshProducts])
+  }, [refreshProducts, skipSupabaseBackground])
 
   const addProduct = useCallback(
     async (newProduct: Omit<Product, "id" | "likes" | "rating" | "reviews">) => {
@@ -258,25 +267,23 @@ export function CatalogProvider({
 
   return (
     <CatalogContext.Provider value={value}>
-      {productsPromise && <CatalogSeed promise={productsPromise} onSeed={seedProducts} />}
+      {productsPromise && <PromiseSeed promise={productsPromise} onSeed={seedProducts} />}
+      {categoriesPromise && <PromiseSeed promise={categoriesPromise} onSeed={seedCategories} />}
       {children}
     </CatalogContext.Provider>
   )
 }
 
 /**
- * Seeds the streamed catalog into state once Supabase responds. Renders null
- * and resolves the server-started promise in an effect, so the storefront
- * never blocks on the database — products simply appear when it lands. The
- * seed never overwrites a non-empty catalog: it is a snapshot from before any
- * mutation the user has since made, so newer rows win.
+ * Seeds a streamed server promise into client state once resolved. Renders null
+ * and resolves inside an effect so routes never block on database reads.
  */
-function CatalogSeed({
+function PromiseSeed<T>({
   promise,
   onSeed,
 }: {
-  promise: Promise<Product[]>
-  onSeed: (products: Product[]) => void
+  promise: Promise<T>
+  onSeed: (data: T) => void
 }) {
   useEffect(() => {
     let active = true
@@ -285,7 +292,7 @@ function CatalogSeed({
         if (active) onSeed(rows)
       },
       () => {
-        // A failed read stays empty; mutations trigger client refetches.
+        // Failed reads stay at initial/fallback state.
       }
     )
     return () => {

@@ -9,10 +9,11 @@ export type Review = {
   photos?: string[]
 }
 
-/** Seller-defined color variant (name shown, hex painted). */
+/** Seller-defined color variant (name shown, hex painted, optional swatch image). */
 export interface ProductColorOption {
   name: string
   hex: string
+  image?: string
 }
 
 export type Product = {

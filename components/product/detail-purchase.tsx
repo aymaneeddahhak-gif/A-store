@@ -20,6 +20,7 @@ export function DetailPurchase({
   product: initialProduct,
   categoryLabel,
   colors,
+  variantLabel = "Size",
   showSizes,
   customSizes,
   selectedColor,
@@ -33,7 +34,8 @@ export function DetailPurchase({
 }: {
   product: Product
   categoryLabel: string
-  colors: { name: string; hex: string }[]
+  colors: { name: string; hex: string; image?: string }[]
+  variantLabel?: string
   showSizes: boolean
   customSizes: string[]
   selectedColor: string
@@ -149,8 +151,8 @@ export function DetailPurchase({
                       }`}
                     >
                       <Image
-                        src={product.image}
-                        alt=""
+                        src={c.image ?? product.image}
+                        alt={c.name}
                         fill
                         sizes="56px"
                         className="object-cover rounded-lg pointer-events-none"
@@ -168,18 +170,20 @@ export function DetailPurchase({
           </div>
         )}
 
-        {/* Size Picker (footwear EU sizes, or the seller's custom list) */}
+        {/* Size / Type Picker */}
         {(showSizes || customSizes.length > 0) && (
           <div className="space-y-2 mb-6">
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-neutral-800 font-medium dark:text-[var(--foreground)]">Size</span>
+              <span className="text-neutral-800 font-medium dark:text-[var(--foreground)]">
+                {variantLabel}
+              </span>
               <span className="text-neutral-400">•</span>
               <span className="text-neutral-400 font-normal dark:text-[var(--muted-foreground)]">
                 {showSizes ? "EU Men" : selectedSize || "Select"}
               </span>
             </div>
 
-            <div className="grid grid-cols-6 gap-2">
+            <div className="flex flex-wrap gap-2">
               {(customSizes.length > 0 ? customSizes : SNEAKER_SIZES).map((s) => {
                 const isSelected = selectedSize === s
                 return (
@@ -188,7 +192,7 @@ export function DetailPurchase({
                     type="button"
                     onClick={() => onSelectSize(s)}
                     aria-pressed={isSelected}
-                    className={`py-2 px-1 text-center text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    className={`min-w-[3.1rem] py-2 px-3 text-center text-xs font-medium rounded-md transition-all cursor-pointer ${
                       isSelected
                         ? "bg-black text-white shadow-xs font-semibold dark:bg-white dark:text-black"
                         : "bg-white border border-neutral-200/90 text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50 dark:bg-white/5 dark:border-white/10 dark:text-[var(--foreground)] dark:hover:bg-white/10"
@@ -222,7 +226,20 @@ export function DetailPurchase({
           {/* Add to Cart / Update cart item */}
           <button
             type="button"
-            onClick={() => (isEditing && onUpdateItem ? onUpdateItem() : addToCart(product, 1, { color: selectedColor, size: showSizes ? selectedSize : undefined }))}
+            onClick={() => {
+              const chosenColor = colors.find((c) => c.name === selectedColor)
+              const variantProduct = chosenColor?.image
+                ? { ...product, image: chosenColor.image }
+                : product
+              if (isEditing && onUpdateItem) {
+                onUpdateItem()
+              } else {
+                addToCart(variantProduct, 1, {
+                  color: selectedColor,
+                  size: showSizes || customSizes.length > 0 ? selectedSize : undefined,
+                })
+              }
+            }}
             disabled={soldOut}
             className="flex-1 bg-black hover:bg-neutral-800 active:scale-[0.99] text-white py-3 px-6 rounded-xl font-medium text-[13.5px] flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer select-none dark:bg-white dark:text-black dark:hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
           >

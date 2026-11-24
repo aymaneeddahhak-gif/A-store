@@ -29,9 +29,9 @@ export const INITIAL_DEMO_SELLER_PRODUCTS: Product[] = [
   },
   {
     id: 9102,
-    name: "Petite Paire Carbon Sneakers",
-    price: 180,
-    original_price: 240,
+    name: "Neon Force Sneakers",
+    price: 189.99,
+    original_price: 224,
     category: "sneakers",
     image: "/images/product/sneakers.png",
     images: ["/images/product/sneakers.png"],

@@ -10,6 +10,9 @@ import {
 } from "@/lib/queries/products"
 import { migrateProductAssetPaths } from "@/lib/product-media"
 import { isAdminEmail } from "@/lib/admin"
+import { isSellerEmail } from "@/lib/seller"
+import { isDemoSellerUser } from "@/lib/demo-seller-products"
+import { isUuid, resetDemoSellerRows } from "@/lib/demo-seller-server"
 import { logAudit } from "@/lib/actions/audit"
 import { allowedCategoryIds } from "@/lib/actions/categories"
 import { isSupabaseOffline } from "@/lib/supabase-circuit"
@@ -28,16 +31,23 @@ async function requireSeller() {
   const supabase = await createSupabaseServerClient()
   const { data: auth } = await supabase.auth.getUser()
   if (!auth?.user) return null
+  const email = auth.user.email ?? ""
+  if (!isSellerEmail(email)) return null
+  const admin = isAdminEmail(email)
+  const demoSandbox = !admin && isDemoSellerUser(email) && isUuid(auth.user.id)
   return {
     supabase,
     userId: auth.user.id,
-    email: auth.user.email ?? "",
-    admin: isAdminEmail(auth.user.email),
+    email,
+    admin,
+    demoSandbox,
   }
 }
 
 function writeClient(seller: NonNullable<Awaited<ReturnType<typeof requireSeller>>>) {
-  return seller.admin ? createSupabaseAdminClient() ?? seller.supabase : seller.supabase
+  return seller.admin || seller.demoSandbox
+    ? createSupabaseAdminClient() ?? seller.supabase
+    : seller.supabase
 }
 
 function sanitizeVariants(input: {
@@ -74,15 +84,15 @@ function sanitizeVariants(input: {
 }
 
 async function ownsRow(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  db: ReturnType<typeof writeClient>,
   userId: string,
   id: number
 ): Promise<boolean> {
   if (isSupabaseOffline()) {
     const row = getFallbackProducts().find((p) => p.id === id)
-    return row?.user_id === userId || row?.user_id == null
+    return row?.user_id === userId
   }
-  const { data } = await supabase
+  const { data } = await db
     .from(PRODUCTS_TABLE)
     .select("user_id")
     .eq("id", id)
@@ -123,7 +133,7 @@ export async function createProductAction(
   if (validationError) return { ok: false, error: validationError }
 
   const seller = await requireSeller()
-  if (!seller) return { ok: false, error: "You must be signed in to manage products." }
+  if (!seller) return { ok: false, error: "Seller account required to manage products." }
   if (!(await allowedCategoryIds()).has(input.category)) {
     return { ok: false, error: "Unknown category." }
   }
@@ -142,7 +152,9 @@ export async function createProductAction(
     rating: 0,
     reviews: [],
     stock: input.stock ?? 0,
-    is_published: input.is_published ?? true,
+    // Demo sandbox products stay strictly unpublished so they never leak to the main storefront.
+    is_published: seller.demoSandbox ? false : input.is_published ?? true,
+    featured: false,
     user_id: seller.admin ? null : seller.userId,
   }
 
@@ -225,8 +237,9 @@ export async function updateProductAction(
   }
 
   const seller = await requireSeller()
-  if (!seller) return { ok: false, error: "You must be signed in to manage products." }
-  if (!seller.admin && !(await ownsRow(seller.supabase, seller.userId, id))) {
+  if (!seller) return { ok: false, error: "Seller account required to manage products." }
+  const db = writeClient(seller)
+  if (!seller.admin && !(await ownsRow(db, seller.userId, id))) {
     return { ok: false, error: "You can only edit your own products." }
   }
   if (
@@ -235,15 +248,15 @@ export async function updateProductAction(
   ) {
     return { ok: false, error: "Unknown category." }
   }
+  if (seller.demoSandbox) {
+    validUpdates.is_published = false
+  }
 
   if (!isSupabaseOffline()) {
     try {
-      const db = writeClient(seller)
-      const { data: updated, error } = await db
-        .from(PRODUCTS_TABLE)
-        .update(validUpdates)
-        .eq("id", id)
-        .select("id")
+      let query = db.from(PRODUCTS_TABLE).update(validUpdates).eq("id", id)
+      if (!seller.admin) query = query.eq("user_id", seller.userId)
+      const { data: updated, error } = await query.select("id")
       if (!error && updated && updated.length > 0) {
         invalidateProductCache()
         revalidateTag(PRODUCTS_CACHE_TAG)
@@ -277,19 +290,17 @@ export async function updateProductAction(
 
 export async function deleteProductAction(id: number): Promise<ProductActionResult> {
   const seller = await requireSeller()
-  if (!seller) return { ok: false, error: "You must be signed in to manage products." }
-  if (!seller.admin && !(await ownsRow(seller.supabase, seller.userId, id))) {
+  if (!seller) return { ok: false, error: "Seller account required to manage products." }
+  const db = writeClient(seller)
+  if (!seller.admin && !(await ownsRow(db, seller.userId, id))) {
     return { ok: false, error: "You can only delete your own products." }
   }
 
   if (!isSupabaseOffline()) {
     try {
-      const db = writeClient(seller)
-      const { data: deleted, error } = await db
-        .from(PRODUCTS_TABLE)
-        .delete()
-        .eq("id", id)
-        .select("id")
+      let query = db.from(PRODUCTS_TABLE).delete().eq("id", id)
+      if (!seller.admin) query = query.eq("user_id", seller.userId)
+      const { data: deleted, error } = await query.select("id")
       if (!error && deleted && deleted.length > 0) {
         invalidateProductCache()
         revalidateTag(PRODUCTS_CACHE_TAG)
@@ -364,27 +375,49 @@ export async function toggleProductLikeAction(
 
 export async function listSellerProductsAction(): Promise<ProductActionResult<Product[]>> {
   const seller = await requireSeller()
-  if (!seller) return { ok: false, error: "You must be signed in to manage products." }
+  if (!seller) return { ok: false, error: "Seller account required to manage products." }
 
   if (!isSupabaseOffline()) {
     try {
-      let query = seller.supabase.from(PRODUCTS_TABLE).select("*").order("id", { ascending: true })
-      if (!seller.admin) query = query.eq("user_id", seller.userId)
+      const db = writeClient(seller)
+      let query = db.from(PRODUCTS_TABLE).select("*").order("id", { ascending: true })
+      if (seller.admin) {
+        // Official Admin sees store products + published seller products, never ephemeral demo sandboxes.
+        query = query.or("user_id.is.null,is_published.eq.true")
+      } else {
+        query = query.eq("user_id", seller.userId)
+      }
       const { data, error } = await query
-      if (!error && data && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         const rows = (data as Product[])
           .map(migrateProductAssetPaths)
           .filter((product): product is Product => product !== null)
-        return { ok: true, data: rows }
+        // Return exact DB rows (even if empty — never leak store catalog products to non-admin sellers!)
+        if (seller.demoSandbox || !seller.admin || rows.length > 0) {
+          return { ok: true, data: rows }
+        }
       }
     } catch {
-      // Fall through to fallback products
+      // Fall through to fallback products only when Supabase is unreachable
     }
   }
 
   const all = getFallbackProducts()
-  const rows = seller.admin ? all : all.filter((p) => p.user_id === seller.userId || p.user_id == null)
+  const rows = seller.admin ? all : all.filter((p) => p.user_id === seller.userId)
   return { ok: true, data: rows }
+}
+
+export async function resetDemoSellerProductsAction(): Promise<ProductActionResult<Product[]>> {
+  const seller = await requireSeller()
+  if (!seller || !seller.demoSandbox) {
+    return { ok: false, error: "Reset is only available for Demo Seller sessions." }
+  }
+  const seeded = await resetDemoSellerRows(seller.userId)
+  if (!seeded) {
+    return { ok: false, error: "Could not reset demo products right now." }
+  }
+  revalidatePath("/seller")
+  return { ok: true, data: seeded }
 }
 
 export async function toggleFeaturedAction(

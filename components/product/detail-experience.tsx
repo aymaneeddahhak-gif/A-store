@@ -31,12 +31,16 @@ export function DetailExperience({
   product,
   categoryLabel,
   colors,
+  variantLabel = "Size",
+  variantOptions = [],
   showSizes,
   editItemId,
 }: {
   product: Product
   categoryLabel: string
-  colors: { name: string; hex: string }[]
+  colors: { name: string; hex: string; image?: string }[]
+  variantLabel?: string
+  variantOptions?: string[]
   showSizes: boolean
   editItemId?: number
 }) {
@@ -45,8 +49,9 @@ export function DetailExperience({
 
   const editingItem = editItemId ? cart.find((item) => item.id === editItemId) : undefined
 
+  const defaultOption = variantOptions[0] ?? (showSizes ? "42" : "")
   const [selectedColor, setSelectedColor] = useState(colors[0]?.name ?? "")
-  const [selectedSize, setSelectedSize] = useState("42")
+  const [selectedSize, setSelectedSize] = useState(defaultOption)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
 
@@ -60,7 +65,22 @@ export function DetailExperience({
     if (editingItem.size) setSelectedSize(editingItem.size)
   }, [cartHydrated, editingItem])
 
-  const media = useMemo(() => getProductMedia(product), [product])
+  const colorImages = useMemo(
+    () => colors.map((c) => c.image).filter((src): src is string => Boolean(src)),
+    [colors]
+  )
+  const media = useMemo(() => getProductMedia(product, colorImages), [product, colorImages])
+
+  const handleSelectColor = (colorName: string) => {
+    setSelectedColor(colorName)
+    const matchedColor = colors.find((c) => c.name === colorName)
+    if (matchedColor?.image) {
+      const idx = media.findIndex((m) => m.kind === "image" && m.src === matchedColor.image)
+      setSelectedIndex(idx >= 0 ? idx : 0)
+    } else {
+      setSelectedIndex(0)
+    }
+  }
 
   const handleUpdateItem = () => {
     if (!editingItem) return
@@ -85,11 +105,12 @@ export function DetailExperience({
             product={product}
             categoryLabel={categoryLabel}
             colors={colors}
+            variantLabel={variantLabel}
             showSizes={showSizes}
-            customSizes={product.custom_sizes ?? []}
+            customSizes={variantOptions.length > 0 ? variantOptions : (product.custom_sizes ?? [])}
             selectedColor={selectedColor}
-            onSelectColor={setSelectedColor}
-            onSelectImage={() => setSelectedIndex(0)}
+            onSelectColor={handleSelectColor}
+            onSelectImage={() => {}}
             selectedSize={selectedSize}
             onSelectSize={setSelectedSize}
             onOpenSizeGuide={() => setSizeGuideOpen(true)}

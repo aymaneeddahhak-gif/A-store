@@ -1,9 +1,10 @@
 "use client"
 
 import React from 'react';
-import { Check, Save, ArrowLeft, Sparkles } from 'lucide-react';
+import { Check, Save, ArrowLeft, CopyPlus } from 'lucide-react';
 
 interface PageHeaderProps {
+  isDarkMode?: boolean;
   isEditMode?: boolean;
   onBack?: () => void;
   onSaveDraft: () => void;
@@ -14,6 +15,7 @@ interface PageHeaderProps {
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
+  isDarkMode = false,
   isEditMode = false,
   onBack,
   onSaveDraft,
@@ -23,24 +25,55 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 }) => {
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-      <div className="flex items-center gap-2.5">
+      <div>
         {onBack && (
-          <button type="button" onClick={onBack} className="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-200 cursor-pointer mr-1" title="Back to products list">
-            <ArrowLeft className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={onBack}
+            className={`h-10 px-4 rounded-xl border flex items-center gap-2 text-sm font-medium transition-colors cursor-pointer ${
+              isDarkMode
+                ? 'bg-[#1e2022] border-gray-800 text-gray-200 hover:bg-[#272a2e]'
+                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+            title="Back to products list"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Products</span>
           </button>
         )}
-        <h2 className="text-xl font-bold tracking-tight text-gray-900">{isEditMode ? 'Edit Product' : 'Add New Product'}</h2>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         {onFillDemo && !isEditMode && (
-          <button type="button" onClick={onFillDemo} className="h-10 px-5 rounded-xl border bg-white border-gray-300/80 text-gray-700 hover:bg-gray-50 flex items-center gap-2 text-sm font-medium cursor-pointer" title="Fill every field with sample data so you can try the flow instantly">
-            <Sparkles className="w-4 h-4" /><span>Fill demo product</span>
+          <button
+            type="button"
+            onClick={onFillDemo}
+            className={`h-10 px-5 rounded-xl border flex items-center gap-2 text-sm font-medium transition-colors cursor-pointer ${
+              isDarkMode
+                ? 'bg-[#1e2022] border-gray-800 text-gray-200 hover:bg-[#272a2e]'
+                : 'bg-white border-gray-300/80 text-gray-700 hover:bg-gray-50'
+            }`}
+            title="Fill every field with sample data so you can try the flow instantly"
+          >
+            <CopyPlus className="w-4 h-4" /><span>Fill demo product</span>
           </button>
         )}
-        <button type="button" onClick={onSaveDraft} className="h-10 px-5 rounded-xl border bg-white border-gray-300/80 text-gray-700 hover:bg-[#98e4af] hover:text-gray-950 hover:border-[#98e4af] flex items-center gap-2 text-sm font-medium cursor-pointer">
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          className={`h-10 px-5 rounded-xl border flex items-center gap-2 text-sm font-medium transition-colors cursor-pointer ${
+            isDarkMode
+              ? 'bg-[#1e2022] border-gray-800 text-gray-200 hover:bg-[#98e4af] hover:text-gray-950 hover:border-[#98e4af]'
+              : 'bg-white border-gray-300/80 text-gray-700 hover:bg-[#98e4af] hover:text-gray-950 hover:border-[#98e4af]'
+          }`}
+        >
           <Save className="w-4 h-4" /><span>Save Draft</span>
         </button>
-        <button type="button" onClick={onAddProduct} disabled={isSubmitting} className="h-10 px-5 rounded-xl bg-[#98e4af] hover:bg-[#88deb3] text-gray-950 flex items-center gap-2 text-sm font-bold cursor-pointer disabled:opacity-50">
+        <button
+          type="button"
+          onClick={onAddProduct}
+          disabled={isSubmitting}
+          className="h-10 px-5 rounded-xl bg-[#98e4af] hover:bg-[#88deb3] text-gray-950 flex items-center gap-2 text-sm font-bold cursor-pointer disabled:opacity-50"
+        >
           <Check className="w-4 h-4" /><span>{isSubmitting ? "Saving…" : isEditMode ? 'Save Changes' : 'Add Product'}</span>
         </button>
       </div>

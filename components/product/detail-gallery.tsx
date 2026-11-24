@@ -58,7 +58,7 @@ export function DetailGallery({
           if (current.kind === "image") setIsZoomed(!isZoomed)
         }}
       >
-        <AnimatePresence mode="wait">
+        <AnimatePresence initial={false} mode="wait">
           {current.kind === "video" ? (
             <motion.video
               key={current.src}

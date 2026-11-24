@@ -15,6 +15,8 @@ export function createSupabaseAdminClient() {
   if (!url || !serviceRoleKey) return null
   return createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: createResilientFetch({ noStore: true }) },
+    global: {
+      fetch: createResilientFetch({ noStore: true, timeoutMs: 8000, bypassCircuit: true }),
+    },
   })
 }

@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useRef } from "react"
+import React from "react"
 import Image from "next/image"
-import { SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react"
+import { SlidersHorizontal } from "lucide-react"
 import { CATEGORIES } from "@/lib/storefront/category-capsules"
 
 interface FilterCapsulesBarProps {
@@ -18,18 +18,6 @@ export const FilterCapsulesBar: React.FC<FilterCapsulesBarProps> = ({
   onOpenFilterDrawer,
   activeFilterCount = 0,
 }) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-
-  const scroll = (direction: "left" | "right") => {
-    if (scrollContainerRef.current) {
-      const scrollAmount = 260
-      scrollContainerRef.current.scrollBy({
-        left: direction === "left" ? -scrollAmount : scrollAmount,
-        behavior: "smooth",
-      })
-    }
-  }
-
   return (
     <div className="w-full">
       {/* FILTER CAPSULES BAR WITH IMAGE BESIDE WORD & FILTERS BUTTON */}
@@ -42,7 +30,7 @@ export const FilterCapsulesBar: React.FC<FilterCapsulesBarProps> = ({
             className={`inline-flex items-center gap-2 px-4 py-2 sm:py-2.5 rounded-full transition-all duration-200 font-bold text-xs sm:text-sm shadow-2xs cursor-pointer border ${
               activeFilterCount > 0
                 ? "bg-black text-white border-black ring-2 ring-black/20 dark:bg-white dark:text-black dark:border-white"
-                : "bg-[#f1f3f5] hover:bg-[#e8ebed] text-gray-900 border-gray-300/80 dark:bg-white/10 dark:hover:bg-white/15 dark:text-white dark:border-white/10"
+                : "bg-white hover:bg-[#f5f0e8] text-[#1f1b16] border-[#e7e0d5] dark:bg-white/10 dark:hover:bg-white/15 dark:text-white dark:border-white/10"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.4]" />
@@ -60,10 +48,7 @@ export const FilterCapsulesBar: React.FC<FilterCapsulesBarProps> = ({
 
         {/* Horizontal Scrollable Capsules Bar */}
         <div className="relative flex-1 overflow-hidden">
-          <div
-            ref={scrollContainerRef}
-            className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1.5 px-0.5 scroll-smooth"
-          >
+          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1.5 px-0.5 scroll-smooth">
             {CATEGORIES.map((item) => {
               const isSelected = selectedCategory === item.id
               const isAll = item.id === "all"
@@ -77,7 +62,7 @@ export const FilterCapsulesBar: React.FC<FilterCapsulesBarProps> = ({
                   } rounded-full transition-all duration-200 cursor-pointer select-none text-left border ${
                     isSelected
                       ? "bg-black text-white border-black shadow-md ring-2 ring-black/20 scale-[1.02] dark:bg-white dark:text-black dark:border-white"
-                      : "bg-white hover:bg-gray-50 text-gray-900 border-gray-200 shadow-2xs hover:shadow-xs hover:border-gray-300 dark:bg-white/5 dark:hover:bg-white/10 dark:text-neutral-200 dark:border-white/10 dark:hover:border-white/25"
+                      : "bg-white hover:bg-[#f5f0e8] text-[#1f1b16] border-[#ece6dc] shadow-2xs hover:shadow-xs hover:border-[#d8d0c4] dark:bg-white/5 dark:hover:bg-white/10 dark:text-neutral-200 dark:border-white/10 dark:hover:border-white/25"
                   }`}
                 >
                   {/* Round Image Avatar Beside the Word (omitted for 'All') */}
@@ -107,24 +92,6 @@ export const FilterCapsulesBar: React.FC<FilterCapsulesBarProps> = ({
               )
             })}
           </div>
-        </div>
-
-        {/* Scroll Arrows on Desktop */}
-        <div className="hidden md:flex items-center gap-1 flex-shrink-0 pl-1">
-          <button
-            onClick={() => scroll("left")}
-            className="w-7 h-7 rounded-full bg-white border border-gray-200 hover:bg-gray-100 flex items-center justify-center text-gray-600 transition-all shadow-2xs cursor-pointer dark:bg-white/10 dark:border-white/10 dark:hover:bg-white/15 dark:text-neutral-200"
-            aria-label="Scroll filters left"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => scroll("right")}
-            className="w-7 h-7 rounded-full bg-white border border-gray-200 hover:bg-gray-100 flex items-center justify-center text-gray-600 transition-all shadow-2xs cursor-pointer dark:bg-white/10 dark:border-white/10 dark:hover:bg-white/15 dark:text-neutral-200"
-            aria-label="Scroll filters right"
-          >
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
     </div>

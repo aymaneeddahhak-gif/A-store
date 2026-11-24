@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { PRODUCTS_CACHE_TAG, invalidateProductCache } from "@/lib/queries/products"
 import { isSupabaseOffline } from "@/lib/supabase-circuit"
 import { getFallbackProducts, setFallbackProducts } from "@/lib/fallback-catalog"
-import type { Product, Review } from "@/lib/types"
+import type { Review } from "@/lib/types"
 
 const PRODUCTS_TABLE = "products"
 const MAX_COMMENT_LENGTH = 1000
@@ -146,5 +146,3 @@ export async function addReviewAction(
     return { ok: true, data: fallbackReview, persisted: false }
   }
 }
-
-export type { Product }

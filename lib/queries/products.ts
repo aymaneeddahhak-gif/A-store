@@ -46,8 +46,22 @@ interface CacheSlot {
   dirty: boolean
 }
 
-const allSlot: CacheSlot = { at: 0, data: [], dirty: true }
-const storeSlot: CacheSlot = { at: 0, data: [], dirty: true }
+const globalProductsCache = globalThis as unknown as {
+  __astoreProductsCache?: {
+    all: CacheSlot
+    store: CacheSlot
+  }
+}
+
+if (!globalProductsCache.__astoreProductsCache) {
+  globalProductsCache.__astoreProductsCache = {
+    all: { at: 0, data: [], dirty: true },
+    store: { at: 0, data: [], dirty: true },
+  }
+}
+
+const allSlot = globalProductsCache.__astoreProductsCache.all
+const storeSlot = globalProductsCache.__astoreProductsCache.store
 
 async function getCached(
   slot: CacheSlot,

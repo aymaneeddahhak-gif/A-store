@@ -174,7 +174,7 @@ export const GeneralInfoCard: React.FC<GeneralInfoCardProps> = ({
                   <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-all ${isSelected ? 'border-2 border-[#98e4af]' : 'border-2 border-gray-400'}`}>
                     {isSelected && <div className="w-2 h-2 rounded-full bg-[#98e4af]" />}
                   </div>
-                  <span className={isSelected ? 'font-semibold text-gray-900' : 'text-gray-500'}>{g}</span>
+                  <span className={isSelected ? (isDarkMode ? 'font-semibold text-white' : 'font-semibold text-gray-900') : 'text-gray-500'}>{g}</span>
                 </button>
               );
             })}

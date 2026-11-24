@@ -12,8 +12,9 @@
  *    server outage or log `Console AuthRetryableFetchError`.
  */
 
-const CIRCUIT_COOLDOWN_MS = 300_000 // 5 minutes
-const FETCH_TIMEOUT_MS = 800
+const CIRCUIT_COOLDOWN_MS = 30_000 // 30 seconds
+const DATA_FETCH_TIMEOUT_MS = 5000
+const AUTH_FETCH_TIMEOUT_MS = 8000
 const SESSION_OFFLINE_KEY = "astore_supabase_offline_until"
 
 const globalCircuit = globalThis as unknown as {
@@ -38,6 +39,17 @@ function getOfflineUntil(): number {
 
 export function isSupabaseOffline(): boolean {
   return getOfflineUntil() > Date.now()
+}
+
+export function resetSupabaseCircuit(): void {
+  globalCircuit.__astoreSupabaseOfflineUntil = 0
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(SESSION_OFFLINE_KEY)
+    } catch {
+      // Ignore storage access errors
+    }
+  }
 }
 
 export function markSupabaseOffline(): void {
@@ -67,7 +79,7 @@ function offlineResponse(input: RequestInfo | URL): Response {
     return new Response(
       JSON.stringify({
         error: "invalid_grant",
-        error_description: "Supabase auth unavailable; demo session active.",
+        error_description: "Supabase auth offline or unreachable; offline demo session fallback.",
       }),
       {
         status: 400,
@@ -89,12 +101,19 @@ function offlineResponse(input: RequestInfo | URL): Response {
   )
 }
 
-export function createResilientFetch(options?: { noStore?: boolean }): typeof fetch {
+export function createResilientFetch(options?: {
+  noStore?: boolean
+  timeoutMs?: number
+  bypassCircuit?: boolean
+}): typeof fetch {
   return async (input, init) => {
-    if (isSupabaseOffline()) {
+    const authCall = isAuthEndpoint(input)
+    if (!authCall && !options?.bypassCircuit && isSupabaseOffline()) {
       return offlineResponse(input)
     }
 
+    const timeoutMs =
+      options?.timeoutMs ?? (authCall ? AUTH_FETCH_TIMEOUT_MS : DATA_FETCH_TIMEOUT_MS)
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -103,7 +122,7 @@ export function createResilientFetch(options?: { noStore?: boolean }): typeof fe
         markSupabaseOffline()
         controller.abort()
         resolve(offlineResponse(input))
-      }, FETCH_TIMEOUT_MS)
+      }, timeoutMs)
     })
 
     const fetchPromise = fetch(input, {

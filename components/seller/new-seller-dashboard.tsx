@@ -12,14 +12,21 @@ import {
   updateOrderStatusAction,
   updateOrderShipmentAction,
 } from "@/lib/actions/orders"
-import { listSellerProductsAction, toggleFeaturedAction } from "@/lib/actions/products"
+import {
+  listSellerProductsAction,
+  resetDemoSellerProductsAction,
+  toggleFeaturedAction,
+} from "@/lib/actions/products"
 import { isAdminEmail } from "@/lib/admin"
 import { isSellerEmail } from "@/lib/seller"
 import {
   isDemoSellerUser,
   getDemoSellerProducts,
   saveDemoSellerProducts,
+  INITIAL_DEMO_SELLER_PRODUCTS,
 } from "@/lib/demo-seller-products"
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import type { Order, Product } from "@/lib/types"
 import { SellerRestrictedGate } from "@/components/seller/restricted-gate"
 import { useSellerNav } from "@/contexts/providers/seller-nav-context"
@@ -97,8 +104,11 @@ export function NewSellerDashboard() {
   const { showToast } = useToast()
   const { isDarkMode } = useThemeContext()
   const isAdmin = isAdminEmail(user?.email)
-  // Fulfilment is the store team's job (admin + seller logins).
+  // Seller dashboard & fulfilment are restricted strictly to Seller + Admin accounts.
   const canManageOrders = isSellerEmail(user?.email)
+  const isDemoSeller = !isAdmin && isDemoSellerUser(user?.email)
+  const isOfflineDemoSandbox = isDemoSeller && !UUID_RE.test(user?.id ?? "")
+  const [isResettingDemo, setIsResettingDemo] = useState(false)
 
   // Tab lives in shared context: the rail flyout and this page drive it.
   const { sellerTab: activeTab, setSellerTab: setActiveTab } = useSellerNav()
@@ -123,7 +133,7 @@ export function NewSellerDashboard() {
   }, [])
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !canManageOrders) {
       setAllOrders([])
       setSellerProducts([])
       return
@@ -132,7 +142,7 @@ export function NewSellerDashboard() {
     void fetchAllOrdersAction().then((res) => {
       if (active && res.ok) setAllOrders(res.data)
     })
-    if (isDemoSellerUser(user?.email)) {
+    if (isOfflineDemoSandbox) {
       setSellerProducts(getDemoSellerProducts())
     } else {
       void listSellerProductsAction().then((res) => {
@@ -154,12 +164,12 @@ export function NewSellerDashboard() {
     return () => {
       active = false
     }
-  }, [user])
+  }, [user, canManageOrders, isOfflineDemoSandbox])
 
   // Pin/unpin a store product from the homepage showcase (admin only, DB-backed).
   const handleToggleFeatured = useCallback(
     async (productId: string, featured: boolean) => {
-      if (isDemoSellerUser(user?.email)) {
+      if (isOfflineDemoSandbox) {
         const id = Number(productId)
         setSellerProducts((prev) => {
           const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, featured } : p))
@@ -193,7 +203,7 @@ export function NewSellerDashboard() {
           : "Removed from the homepage showcase."
       )
     },
-    [patchProductLocal, refreshProducts, showToastMsg, user?.email]
+    [patchProductLocal, refreshProducts, showToastMsg, isOfflineDemoSandbox]
   )
 
   const handleStatusChange = useCallback(
@@ -319,7 +329,7 @@ export function NewSellerDashboard() {
 
   const handleDeleteProduct = useCallback(
     async (productId: string) => {
-      if (isDemoSellerUser(user?.email)) {
+      if (isOfflineDemoSandbox) {
         const id = Number(productId)
         setSellerProducts((prev) => {
           const updated = (prev ?? []).filter((p) => p.id !== id)
@@ -332,13 +342,36 @@ export function NewSellerDashboard() {
       const ok = await deleteProduct(Number(productId))
       if (ok) setSellerProducts((prev) => (prev ?? []).filter((p) => p.id !== Number(productId)))
     },
-    [deleteProduct, user?.email, showToastMsg]
+    [deleteProduct, isOfflineDemoSandbox, showToastMsg]
   )
+
+  const handleResetDemo = useCallback(async () => {
+    if (!isDemoSeller || isResettingDemo) return
+    setIsResettingDemo(true)
+    try {
+      if (isOfflineDemoSandbox) {
+        const fresh = INITIAL_DEMO_SELLER_PRODUCTS.map((p) => ({ ...p }))
+        saveDemoSellerProducts(fresh)
+        setSellerProducts(fresh)
+        showToastMsg("Demo products reset to the 3 starter examples.")
+        return
+      }
+      const res = await resetDemoSellerProductsAction()
+      if (res.ok) {
+        setSellerProducts(res.data)
+        showToastMsg("Demo products reset to the 3 starter examples.")
+      } else {
+        showToastMsg(res.error || "Could not reset demo products.")
+      }
+    } finally {
+      setIsResettingDemo(false)
+    }
+  }, [isDemoSeller, isOfflineDemoSandbox, isResettingDemo, showToastMsg])
 
   const handleUpdateStock = useCallback(
     async (productId: string, newStock: string) => {
       const stock = Math.max(0, Math.floor(Number(newStock) || 0))
-      if (isDemoSellerUser(user?.email)) {
+      if (isOfflineDemoSandbox) {
         const id = Number(productId)
         setSellerProducts((prev) => {
           const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, stock } : p))
@@ -355,12 +388,12 @@ export function NewSellerDashboard() {
         )
       }
     },
-    [updateProduct, user?.email, showToastMsg]
+    [updateProduct, isOfflineDemoSandbox, showToastMsg]
   )
 
   const handleSaved = useCallback(
     async (payload: ReturnType<typeof toProductPayload>, editingId: string | null) => {
-      if (isDemoSellerUser(user?.email)) {
+      if (isOfflineDemoSandbox) {
         if (editingId) {
           const id = Number(editingId)
           setSellerProducts((prev) => {
@@ -384,8 +417,8 @@ export function NewSellerDashboard() {
           video: payload.video,
           description: payload.description,
           stock: payload.stock,
-          is_published: payload.is_published ?? true,
-          featured: payload.featured ?? false,
+          is_published: payload.is_published ?? false,
+          featured: false,
           user_id: user?.id || "demo-seller-role-id",
           likes: 0,
           rating: 5,
@@ -426,7 +459,7 @@ export function NewSellerDashboard() {
       showToastMsg("Could not save the product — please try again.")
       return false
     },
-    [addProduct, updateProduct, isAdmin, user?.id, user?.email, showToastMsg]
+    [addProduct, updateProduct, isAdmin, isOfflineDemoSandbox, user?.id, showToastMsg]
   )
 
   const closeForm = useCallback(() => {
@@ -434,10 +467,11 @@ export function NewSellerDashboard() {
     setEditingProductId(null)
   }, [])
 
-  // Never stall /seller behind a blocking skeleton once auth settles:
-  // logged-out users see the guided login gate immediately, and logged-in
-  // users enter the console shell right away while live data hydrates.
-  if (!authLoading && !user) return <SellerRestrictedGate />
+  // Show the full-width Seller Dashboard screenshot showcase with Sign-In CTA
+  // right on /seller for logged-out visitors AND normal non-seller customers.
+  if (!authLoading && (!user || !canManageOrders)) {
+    return <SellerRestrictedGate isSignedInNonSeller={Boolean(user && !canManageOrders)} />
+  }
   if (!user) return <DashboardSkeleton />
 
   const showForm = isCreatingProduct
@@ -507,6 +541,7 @@ export function NewSellerDashboard() {
       case "Offers":
         return (
           <OffersDiscountView
+            isDarkMode={isDarkMode}
             products={sellerProducts ?? []}
             isAdmin={isAdmin}
           />
@@ -570,6 +605,8 @@ export function NewSellerDashboard() {
               onUpdateStock={(id, stock) => void handleUpdateStock(id, stock)}
               onToggleFeatured={(id, featured) => void handleToggleFeatured(id, featured)}
               canFeature={isAdmin}
+              onResetDemo={isDemoSeller ? () => void handleResetDemo() : undefined}
+              isResettingDemo={isResettingDemo}
               onShowToast={showToastMsg}
             />
           )
@@ -577,6 +614,7 @@ export function NewSellerDashboard() {
 
         return (
           <AddProductView
+            isDarkMode={isDarkMode}
             initial={editingItem}
             categories={categories.filter((c) => c.id !== "all")}
             onAddCategory={createCategory}
@@ -609,10 +647,12 @@ export function NewSellerDashboard() {
                   setActiveTab(t)
                   closeForm()
                 }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap cursor-pointer border transition-colors ${
                   activeTab === t && !showForm
-                    ? "bg-[#98e4af] text-gray-950 font-bold"
-                    : "bg-white text-gray-600 border border-gray-200"
+                    ? "bg-[#98e4af] text-gray-950 border-[#98e4af] font-bold"
+                    : isDarkMode
+                    ? "bg-[#1e2022] text-gray-300 border-gray-800 hover:bg-[#272a2e]"
+                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
                 }`}
               >
                 {t}
