@@ -65,11 +65,16 @@ export function avatarVariantForEmail(email?: string | null): AvatarVariant {
     lower === "seller@a-store.shop" ||
     lower === "demo-seller@a-store.shop" ||
     lower === "admin@a-store.shop" ||
-    lower.endsWith("@demo.a-store.shop")
+    (lower.startsWith("demo-seller-") && lower.endsWith("@demo.a-store.shop"))
   ) {
     return "demo_seller"
   }
-  if (lower === "customer@a-store.shop") return "customer"
+  if (
+    lower === "customer@a-store.shop" ||
+    (lower.startsWith("demo-client-") && lower.endsWith("@demo.a-store.shop"))
+  ) {
+    return "customer"
+  }
   return "default"
 }
 

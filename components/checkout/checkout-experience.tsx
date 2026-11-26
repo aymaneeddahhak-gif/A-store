@@ -355,12 +355,12 @@ export function CheckoutExperience() {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
-          {/* ================= LEFT: MASCOT (framed card with its own background like login) ================= */}
+          {/* ================= LEFT: MASCOT (framed card like login with its own background) ================= */}
           <div className="w-full lg:col-span-6 flex flex-col justify-center">
-            <div className="relative flex items-center justify-center w-full flex-1 min-h-[420px] rounded-[20px] overflow-hidden bg-[#fbfaf8] border border-[#ecedec] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.12)] p-4 sm:p-6 select-none pointer-events-none">
+            <div className="relative flex items-center justify-center w-full rounded-[20px] overflow-hidden bg-white border border-[#ecedec] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.12)] select-none pointer-events-none">
               <video
                 ref={mascotVideoRef}
-                src="/videos/mascot/checkoutcartvideotrsprnt.webm"
+                src="/videos/mascot/checkout.mp4"
                 autoPlay={!reducedMotion}
                 muted
                 loop

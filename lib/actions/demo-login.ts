@@ -10,7 +10,10 @@ import {
 } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { DEMO_ACCOUNTS, type DemoAccountId } from "@/lib/demo-accounts"
-import { ensurePersistentDemoUser, isUuid } from "@/lib/demo-seller-server"
+import { ensureVisitorDemoUser, isUuid } from "@/lib/demo-seller-server"
+
+const VISITOR_SELLER_UID_COOKIE = "astore_visitor_seller_uid"
+const VISITOR_CLIENT_UID_COOKIE = "astore_visitor_client_uid"
 
 async function setSignedDemoCookie(payload: { id: string; email: string; full_name: string }) {
   const cookieStore = await cookies()
@@ -20,7 +23,7 @@ async function setSignedDemoCookie(payload: { id: string; email: string; full_na
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: 60 * 60 * 24,
   })
 }
 
@@ -37,12 +40,25 @@ export async function demoSessionLoginAction(accountId: DemoAccountId): Promise<
   const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)
   if (!account) return { ok: false, error: "Unknown account." }
 
-  const res = await ensurePersistentDemoUser({
-    email: account.email,
-    fullName: accountId === "demo_seller" ? "Seller" : "Alex Customer",
+  const cookieStore = await cookies()
+  const visitorCookieName =
+    accountId === "demo_seller" ? VISITOR_SELLER_UID_COOKIE : VISITOR_CLIENT_UID_COOKIE
+  const existingUid = cookieStore.get(visitorCookieName)?.value
+
+  const res = await ensureVisitorDemoUser({
     role: accountId,
+    fullName: accountId === "demo_seller" ? "Seller" : "Alex Customer",
+    existingUserId: existingUid,
   })
   if (!res.ok) return { ok: false, error: res.error }
+
+  cookieStore.set(visitorCookieName, res.user.id, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24,
+  })
 
   await setSignedDemoCookie({
     id: res.user.id,

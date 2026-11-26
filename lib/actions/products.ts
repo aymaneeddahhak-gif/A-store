@@ -11,7 +11,7 @@ import {
 import { migrateProductAssetPaths } from "@/lib/product-media"
 import { isAdminEmail } from "@/lib/admin"
 import { isSellerEmail } from "@/lib/seller"
-import { isUuid } from "@/lib/demo-seller-server"
+import { isDemoVisitorEmail, isUuid } from "@/lib/demo-seller-server"
 import { logAudit } from "@/lib/actions/audit"
 import { allowedCategoryIds } from "@/lib/actions/categories"
 import type { Product } from "@/lib/types"
@@ -32,11 +32,13 @@ async function requireSeller() {
   const email = auth.user.email ?? ""
   if (!isSellerEmail(email)) return null
   const admin = isAdminEmail(email)
+  const demoSandbox = !admin && isDemoVisitorEmail(email)
   return {
     supabase,
     userId: auth.user.id,
     email,
     admin,
+    demoSandbox,
   }
 }
 
@@ -164,7 +166,9 @@ export async function createProductAction(
     rating: 0,
     reviews: [],
     stock: input.stock ?? 0,
-    is_published: input.is_published ?? true,
+    // Visitor sandbox products stay unpublished so strangers never alter the public storefront;
+    // real sellers & admin publish directly to Supabase.
+    is_published: seller.demoSandbox ? false : input.is_published ?? true,
     featured: false,
     user_id: seller.admin ? null : seller.userId,
   }
@@ -250,6 +254,9 @@ export async function updateProductAction(
     !(await allowedCategoryIds()).has(validUpdates.category)
   ) {
     return { ok: false, error: "Unknown category." }
+  }
+  if (seller.demoSandbox) {
+    validUpdates.is_published = false
   }
 
   try {

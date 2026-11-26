@@ -1,12 +1,20 @@
 import "server-only"
 
+import crypto from "node:crypto"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 
 const PRODUCTS_TABLE = "products"
+const ORDERS_TABLE = "orders"
+const DEMO_EMAIL_DOMAIN = "@demo.a-store.shop"
+const DEMO_TTL_MS = 24 * 60 * 60 * 1000
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function isUuid(value?: string | null): boolean {
   return Boolean(value && UUID_RE.test(value))
+}
+
+export function isDemoVisitorEmail(email?: string | null): boolean {
+  return Boolean(email && email.trim().toLowerCase().endsWith(DEMO_EMAIL_DOMAIN))
 }
 
 function buildSellerStarterProducts(userId: string) {
@@ -23,7 +31,7 @@ function buildSellerStarterProducts(userId: string) {
         "Official match-day performance jersey featuring breathable micro-perforated fabric, metallic gold trim, and woven club crest.",
       stock: 85,
       sold_count: 18,
-      is_published: true,
+      is_published: false,
       featured: false,
       user_id: userId,
       likes: 240,
@@ -44,7 +52,7 @@ function buildSellerStarterProducts(userId: string) {
         "Ultra-lightweight street and running silhouette engineered with a responsive carbon-fiber plate and dual-density foam midsole.",
       stock: 60,
       sold_count: 24,
-      is_published: true,
+      is_published: false,
       featured: false,
       user_id: userId,
       likes: 185,
@@ -65,7 +73,7 @@ function buildSellerStarterProducts(userId: string) {
         "Hand-draped silk organza silhouette with structured corset boning, delicate tonal beadwork, and a sweeping cathedral train.",
       stock: 12,
       sold_count: 6,
-      is_published: true,
+      is_published: false,
       featured: false,
       user_id: userId,
       likes: 95,
@@ -77,29 +85,39 @@ function buildSellerStarterProducts(userId: string) {
   ]
 }
 
-async function findUserByEmail(email: string) {
+async function cleanupExpiredVisitorUsers(): Promise<void> {
   const admin = createSupabaseAdminClient()
-  if (!admin) return null
-  const target = email.trim().toLowerCase()
-  for (let page = 1; page <= 10; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 100 })
-    if (error || !data?.users?.length) break
-    const match = data.users.find((u) => (u.email ?? "").toLowerCase() === target)
-    if (match) return match
-    if (data.users.length < 100) break
+  if (!admin) return
+  try {
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 })
+    const users = data?.users ?? []
+    const cutoff = Date.now() - DEMO_TTL_MS
+    const expired = users.filter((u) => {
+      const email = (u.email ?? "").toLowerCase()
+      if (!email.endsWith(DEMO_EMAIL_DOMAIN)) return false
+      const createdAt = Date.parse(u.created_at ?? "")
+      return Number.isFinite(createdAt) && createdAt < cutoff
+    })
+    for (const u of expired.slice(0, 20)) {
+      await admin.from(PRODUCTS_TABLE).delete().eq("user_id", u.id)
+      await admin.from(ORDERS_TABLE).delete().eq("user_id", u.id)
+      await admin.auth.admin.deleteUser(u.id)
+    }
+  } catch {
+    // Non-fatal background cleanup
   }
-  return null
 }
 
 /**
- * Finds or creates a persistent Supabase Auth user for a quick-login role
- * (`seller@a-store.shop` or `customer@a-store.shop`). All products, likes,
- * profile settings, and orders persist in Supabase under their real UUID.
+ * Finds the visitor's existing per-browser isolated Supabase user (if active
+ * and matching the requested role), or provisions a brand-new isolated
+ * Supabase Auth user (`demo-seller-<token>@demo.a-store.shop` or
+ * `demo-client-<token>@demo.a-store.shop`).
  */
-export async function ensurePersistentDemoUser(input: {
-  email: string
-  fullName: string
+export async function ensureVisitorDemoUser(input: {
   role: "demo_seller" | "customer"
+  fullName: string
+  existingUserId?: string | null
 }): Promise<
   | {
       ok: true
@@ -117,48 +135,58 @@ export async function ensurePersistentDemoUser(input: {
     return { ok: false, error: "Supabase service role key is required for quick sign-in." }
   }
 
+  const prefix = input.role === "demo_seller" ? "demo-seller-" : "demo-client-"
+
   try {
-    const cleanEmail = input.email.trim().toLowerCase()
-    const existing = await findUserByEmail(cleanEmail)
-    if (existing) {
-      const meta = (existing.user_metadata ?? {}) as Record<string, unknown>
-      const resolvedName =
-        typeof meta.full_name === "string" && meta.full_name.trim()
-          ? meta.full_name.trim()
-          : input.fullName
-      return {
-        ok: true,
-        user: {
-          id: existing.id,
-          email: existing.email ?? cleanEmail,
-          fullName: resolvedName,
-          metadata: meta,
-        },
+    if (input.existingUserId && isUuid(input.existingUserId)) {
+      const { data: existing, error: readErr } = await admin.auth.admin.getUserById(
+        input.existingUserId
+      )
+      const email = (existing?.user?.email ?? "").toLowerCase()
+      if (!readErr && existing?.user && email.startsWith(prefix) && email.endsWith(DEMO_EMAIL_DOMAIN)) {
+        const meta = (existing.user.user_metadata ?? {}) as Record<string, unknown>
+        const resolvedName =
+          typeof meta.full_name === "string" && meta.full_name.trim()
+            ? meta.full_name.trim()
+            : input.fullName
+        return {
+          ok: true,
+          user: {
+            id: existing.user.id,
+            email,
+            fullName: resolvedName,
+            metadata: meta,
+          },
+        }
       }
     }
 
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+    const internalEmail = `${prefix}${token}${DEMO_EMAIL_DOMAIN}`
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email: cleanEmail,
+      email: internalEmail,
       email_confirm: true,
       user_metadata: {
         role: input.role,
+        demo_visitor: true,
         full_name: input.fullName,
       },
     })
     if (createErr || !created?.user?.id) {
-      return { ok: false, error: createErr?.message || "Could not create Supabase user." }
+      return { ok: false, error: createErr?.message || "Could not create Supabase session." }
     }
 
-    // On first creation of the Seller account, seed starter rows directly in Supabase.
     if (input.role === "demo_seller") {
       await admin.from(PRODUCTS_TABLE).insert(buildSellerStarterProducts(created.user.id))
     }
+
+    void cleanupExpiredVisitorUsers()
 
     return {
       ok: true,
       user: {
         id: created.user.id,
-        email: created.user.email ?? cleanEmail,
+        email: internalEmail,
         fullName: input.fullName,
         metadata: (created.user.user_metadata ?? {}) as Record<string, unknown>,
       },
