@@ -18,6 +18,7 @@ import {
 } from "@/lib/actions/products"
 import { isAdminEmail } from "@/lib/admin"
 import { isSellerEmail } from "@/lib/seller"
+import { supabase as browserSupabase } from "@/lib/supabase"
 import type { Order, Product } from "@/lib/types"
 import { SellerRestrictedGate } from "@/components/seller/restricted-gate"
 import { useSellerNav } from "@/contexts/providers/seller-nav-context"
@@ -133,9 +134,18 @@ export function NewSellerDashboard() {
       return
     }
     let active = true
-    void fetchAllOrdersAction().then((res) => {
-      if (active && res.ok) setAllOrders(res.data)
-    })
+    const syncOrdersAndBuyers = () => {
+      void fetchAllOrdersAction().then((res) => {
+        if (active && res.ok) setAllOrders(res.data)
+      })
+      if (isAdminEmail(user?.email)) {
+        void listCustomerProfilesAction().then((res) => {
+          if (active && res.ok) setCustomerProfiles(res.data)
+        })
+      }
+    }
+
+    syncOrdersAndBuyers()
     void listSellerProductsAction().then((res) => {
       if (!active) return
       if (res.ok) setSellerProducts(res.data)
@@ -147,13 +157,27 @@ export function NewSellerDashboard() {
     void getStoreSettingsAction().then((res) => {
       if (active && res.ok) setStoreSettings(res.data)
     })
-    if (isAdminEmail(user?.email)) {
-      void listCustomerProfilesAction().then((res) => {
-        if (active && res.ok) setCustomerProfiles(res.data)
-      })
+
+    const onFocusOrVisible = () => {
+      if (!document.hidden) syncOrdersAndBuyers()
     }
+    window.addEventListener("focus", onFocusOrVisible)
+    document.addEventListener("visibilitychange", onFocusOrVisible)
+
+    const ordersChannel = browserSupabase
+      .channel("seller-orders-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => syncOrdersAndBuyers()
+      )
+      .subscribe()
+
     return () => {
       active = false
+      window.removeEventListener("focus", onFocusOrVisible)
+      document.removeEventListener("visibilitychange", onFocusOrVisible)
+      void browserSupabase.removeChannel(ordersChannel)
     }
   }, [user, canManageOrders])
 

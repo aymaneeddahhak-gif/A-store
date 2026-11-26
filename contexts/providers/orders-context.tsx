@@ -48,19 +48,31 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     }
 
     let active = true
-    setOrdersLoading(true)
-    void fetchMyOrdersAction()
-      .then((res) => {
-        if (!active) return
-        if (res.ok) setOrders(res.data)
-        else setOrders([])
-      })
-      .finally(() => {
-        if (active) setOrdersLoading(false)
-      })
+    const syncMyOrders = (showLoader: boolean) => {
+      if (showLoader) setOrdersLoading(true)
+      void fetchMyOrdersAction()
+        .then((res) => {
+          if (!active) return
+          if (res.ok) setOrders(res.data)
+          else if (showLoader) setOrders([])
+        })
+        .finally(() => {
+          if (active && showLoader) setOrdersLoading(false)
+        })
+    }
+
+    syncMyOrders(true)
+
+    const onFocusOrVisible = () => {
+      if (!document.hidden) syncMyOrders(false)
+    }
+    window.addEventListener("focus", onFocusOrVisible)
+    document.addEventListener("visibilitychange", onFocusOrVisible)
 
     return () => {
       active = false
+      window.removeEventListener("focus", onFocusOrVisible)
+      document.removeEventListener("visibilitychange", onFocusOrVisible)
     }
   }, [user])
 

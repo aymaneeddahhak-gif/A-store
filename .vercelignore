@@ -8,6 +8,7 @@ next-env.d.ts
 
 # Environment files (configure in Vercel Project Settings instead)
 .env*
+ADMIN_CREDENTIALS.md
 
 # Git & CI
 .git

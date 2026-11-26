@@ -156,15 +156,23 @@ export async function listCustomerProfilesAction(): Promise<
     return { ok: false, error: "Needs SUPABASE_SERVICE_ROLE_KEY in the environment." }
   }
 
-  const { data, error } = await admin.auth.admin.listUsers()
-  if (error) return { ok: false, error: error.message }
+  const allUsers: CustomerProfile[] = []
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    if (error) return { ok: false, error: error.message }
+    const batch = data?.users ?? []
+    for (const u of batch) {
+      allUsers.push({
+        id: u.id,
+        name: (u.user_metadata?.full_name as string | undefined) || u.email?.split("@")[0] || "—",
+        email: u.email ?? "—",
+      })
+    }
+    if (batch.length < 200) break
+  }
 
   return {
     ok: true,
-    data: data.users.map((u) => ({
-      id: u.id,
-      name: (u.user_metadata?.full_name as string | undefined) || u.email?.split("@")[0] || "—",
-      email: u.email ?? "—",
-    })),
+    data: allUsers,
   }
 }

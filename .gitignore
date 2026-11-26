@@ -19,6 +19,7 @@ yarn-error.log*
 # env files
 .env*
 !.env.example
+ADMIN_CREDENTIALS.md
 
 # vercel
 .vercel
