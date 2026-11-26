@@ -35,6 +35,7 @@ export function LoginPageClient() {
               showPassword={flow.showPassword}
               isLoading={flow.isLoading}
               isGoogleLoading={flow.isGoogleLoading}
+              fieldErrors={flow.fieldErrors}
               feedback={flow.feedback}
               onEmailChange={flow.setEmail}
               onPasswordChange={flow.setPassword}

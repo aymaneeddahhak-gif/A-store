@@ -9,11 +9,24 @@ import { demoSessionLoginAction } from "@/lib/actions/demo-login"
 import { isSellerEmail } from "@/lib/seller"
 import type { AuthFeedback, AuthMode } from "@/components/login/types"
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
 function resolveNextPath(): string {
   if (typeof window === "undefined") return "/"
   const next = new URLSearchParams(window.location.search).get("next")
   if (next && next.startsWith("/") && !next.startsWith("//")) return next
   return "/"
+}
+
+function mapAuthErrorMessage(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower.includes("rate limit") || lower.includes("too many requests") || lower.includes("429")) {
+    return "Too many attempts. Please wait a moment and try again."
+  }
+  if (lower.includes("failed to fetch") || lower.includes("network") || lower.includes("timed out")) {
+    return "Unable to reach the authentication server. Check your connection and try again."
+  }
+  return raw
 }
 
 export function useAuthFlow() {
@@ -26,6 +39,11 @@ export function useAuthFlow() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [username, setUsername] = useState("")
+  const [fieldErrors, setFieldErrors] = useState<{
+    username?: string
+    email?: string
+    password?: string
+  }>({})
   const [feedback, setFeedback] = useState<AuthFeedback | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
@@ -47,16 +65,47 @@ export function useAuthFlow() {
   const switchMode = useCallback((newMode: AuthMode) => {
     setMode(newMode)
     setFeedback(null)
+    setFieldErrors({})
     setSignupSuccess(false)
     setPassword("")
   }, [])
 
+  const validateFields = useCallback((): boolean => {
+    const errors: { username?: string; email?: string; password?: string } = {}
+    const cleanEmail = email.trim()
+
+    if (mode === "signup") {
+      const cleanName = username.trim()
+      if (!cleanName) errors.username = "Full name is required."
+      else if (cleanName.length < 2) errors.username = "Full name must be at least 2 characters."
+      else if (cleanName.length > 60) errors.username = "Full name must be under 60 characters."
+    }
+
+    if (!cleanEmail) {
+      errors.email = "Email address is required."
+    } else if (!EMAIL_RE.test(cleanEmail)) {
+      errors.email = "Enter a valid email address (e.g. you@example.com)."
+    }
+
+    if (!password) {
+      errors.password = "Password is required."
+    } else if (mode === "signup") {
+      if (!password.trim()) errors.password = "Password cannot be only spaces."
+      else if (password.length < 6) errors.password = "Password must be at least 6 characters."
+      else if (password.length > 72) errors.password = "Password must be 72 characters or fewer."
+    }
+
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }, [mode, username, email, password])
+
   const signInWithPassword = useCallback(
     async (signInEmail: string, signInPassword: string) => {
       const target = resolveNextPath()
+      const cleanEmail = signInEmail.trim().toLowerCase()
       try {
         const { error } = await supabase.auth.signInWithPassword({
-          email: signInEmail,
+          email: cleanEmail,
           password: signInPassword,
         })
 
@@ -82,11 +131,11 @@ export function useAuthFlow() {
             message: "Please verify your email first. Check your inbox for a confirmation link.",
           })
         } else {
-          setFeedback({ type: "error", message: error.message })
+          setFeedback({ type: "error", message: mapAuthErrorMessage(error.message) })
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Could not reach Supabase Auth."
-        setFeedback({ type: "error", message: msg })
+        const msg = err instanceof Error ? err.message : "Could not reach authentication server."
+        setFeedback({ type: "error", message: mapAuthErrorMessage(msg) })
       }
     },
     [router, switchMode]
@@ -97,24 +146,35 @@ export function useAuthFlow() {
   }, [email, password, signInWithPassword])
 
   const handleSignUp = useCallback(async () => {
-    if (password.length < 6) {
-      setFeedback({ type: "error", message: "Password must be at least 6 characters." })
-      return
-    }
+    const cleanEmail = email.trim().toLowerCase()
+    const cleanName = username.trim()
     const target = resolveNextPath()
 
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
-        options: { data: { full_name: username } },
+        options: {
+          data: { full_name: cleanName },
+          emailRedirectTo:
+            typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+        },
       })
 
       if (error) {
         if (error.message.includes("Password should be")) {
           setFeedback({ type: "error", message: "Password must be at least 6 characters." })
+        } else if (error.message.toLowerCase().includes("already registered")) {
+          setFeedback({
+            type: "error",
+            message: "An account with this email already exists.",
+            action: {
+              label: "Sign in instead",
+              onClick: () => switchMode("login"),
+            },
+          })
         } else {
-          setFeedback({ type: "error", message: error.message })
+          setFeedback({ type: "error", message: mapAuthErrorMessage(error.message) })
         }
         return
       }
@@ -140,8 +200,8 @@ export function useAuthFlow() {
         setFeedback(null)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Could not reach Supabase Auth."
-      setFeedback({ type: "error", message: msg })
+      const msg = err instanceof Error ? err.message : "Could not reach authentication server."
+      setFeedback({ type: "error", message: mapAuthErrorMessage(msg) })
     }
   }, [email, password, username, router, switchMode])
 
@@ -149,6 +209,8 @@ export function useAuthFlow() {
     async (e: React.FormEvent) => {
       e.preventDefault()
       setFeedback(null)
+      if (!validateFields()) return
+
       setIsLoading(true)
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("start-delivery-loading", {
@@ -165,7 +227,7 @@ export function useAuthFlow() {
         }
       }
     },
-    [mode, handleSignIn, handleSignUp]
+    [mode, validateFields, handleSignIn, handleSignUp]
   )
 
   const handleGoogleLogin = useCallback(async () => {
@@ -177,28 +239,56 @@ export function useAuthFlow() {
         options: { redirectTo: `${window.location.origin}/auth/callback` },
       })
       if (error) {
-        setFeedback({ type: "error", message: error.message })
+        setFeedback({ type: "error", message: mapAuthErrorMessage(error.message) })
         setIsGoogleLoading(false)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Google sign-in failed."
-      setFeedback({ type: "error", message })
+      setFeedback({ type: "error", message: mapAuthErrorMessage(message) })
       setIsGoogleLoading(false)
     }
   }, [])
 
-  const handleForgotPassword = useCallback(() => {
-    setFeedback({
-      type: "info",
-      message: "Use your registered credentials or sign in with Google or one-click role cards above.",
-    })
-  }, [])
+  const handleForgotPassword = useCallback(async () => {
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        email: "Enter your account email first to receive a password reset link.",
+      }))
+      setFeedback({
+        type: "info",
+        message: "Enter your registered email above, then click Forgot password.",
+      })
+      return
+    }
+
+    setFeedback(null)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo:
+          typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+      })
+      if (error) {
+        setFeedback({ type: "error", message: mapAuthErrorMessage(error.message) })
+      } else {
+        setFeedback({
+          type: "info",
+          message: `If an account exists for ${cleanEmail}, a password reset link has been sent.`,
+        })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not send reset email."
+      setFeedback({ type: "error", message: mapAuthErrorMessage(msg) })
+    }
+  }, [email])
 
   const handleDemoLogin = useCallback(
     async (accountId: DemoAccountId) => {
       const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)
       if (!account) return
       setFeedback(null)
+      setFieldErrors({})
       setIsLoading(true)
       const queryNext = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null
       const defaultTarget = accountId === "customer" ? "/profile" : "/seller"
@@ -245,11 +335,21 @@ export function useAuthFlow() {
     showPassword,
     setShowPassword,
     email,
-    setEmail,
+    setEmail: (v: string) => {
+      setEmail(v)
+      setFieldErrors((prev) => (prev.email ? { ...prev, email: undefined } : prev))
+    },
     password,
-    setPassword,
+    setPassword: (v: string) => {
+      setPassword(v)
+      setFieldErrors((prev) => (prev.password ? { ...prev, password: undefined } : prev))
+    },
     username,
-    setUsername,
+    setUsername: (v: string) => {
+      setUsername(v)
+      setFieldErrors((prev) => (prev.username ? { ...prev, username: undefined } : prev))
+    },
+    fieldErrors,
     feedback,
     isLoading,
     isGoogleLoading,

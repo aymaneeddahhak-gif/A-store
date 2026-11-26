@@ -130,35 +130,93 @@ export function CheckoutExperience() {
   const discount = promoApplied ? subtotal * (promoPercent / 100) : 0
   const total = Math.max(0, subtotal - discount + shipping)
 
-  const emailValid = /.+@.+\..+/.test(formData.email.trim())
+  const cleanEmail = formData.email.trim()
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)
+  const cleanCardDigits = formData.cardNumber.replace(/\D/g, "")
+  const expMatch = formData.cardExp.trim().match(/^(0[1-9]|1[0-2])\/(\d{2})$/)
+  const expNotExpired =
+    expMatch !== null &&
+    new Date(2000 + Number(expMatch[2]), Number(expMatch[1])) > new Date()
+  const cleanCvc = formData.cardCvc.trim()
+
   // Per-field reasons shown under each input once visited.
   const fieldErrors: Record<string, string> = {
-    firstName: formData.firstName.trim() ? "" : "First name is required.",
-    lastName: formData.lastName.trim() ? "" : "Last name is required.",
-    email: !formData.email.trim()
+    firstName: !formData.firstName.trim()
+      ? "First name is required."
+      : formData.firstName.trim().length < 2
+        ? "First name must be at least 2 characters."
+        : "",
+    lastName: !formData.lastName.trim()
+      ? "Last name is required."
+      : formData.lastName.trim().length < 2
+        ? "Last name must be at least 2 characters."
+        : "",
+    email: !cleanEmail
       ? "Email address is required."
       : !emailValid
         ? "Enter a valid email address (e.g. you@example.com)."
         : "",
-    address: formData.address.trim() ? "" : "Street address is required.",
-    city: formData.city.trim() ? "" : "City is required.",
-    postalCode: formData.postalCode.trim() ? "" : "Postal code is required.",
+    address: !formData.address.trim()
+      ? "Street address is required."
+      : formData.address.trim().length < 5
+        ? "Enter a complete street address."
+        : "",
+    city: !formData.city.trim()
+      ? "City is required."
+      : formData.city.trim().length < 2
+        ? "Enter a valid city name."
+        : "",
+    postalCode: !formData.postalCode.trim()
+      ? "Postal code is required."
+      : !/^[A-Za-z0-9\s-]{3,12}$/.test(formData.postalCode.trim())
+        ? "Postal code must be 3–12 letters or digits."
+        : "",
+    cardNumber:
+      formData.paymentMethod !== "card"
+        ? ""
+        : !cleanCardDigits
+          ? "Card number is required."
+          : cleanCardDigits.length < 13 || cleanCardDigits.length > 19
+            ? "Card number must be 13–19 digits."
+            : "",
+    cardExp:
+      formData.paymentMethod !== "card"
+        ? ""
+        : !formData.cardExp.trim()
+          ? "Expiry date is required."
+          : !expMatch
+            ? "Use MM/YY format (e.g. 08/28)."
+            : !expNotExpired
+              ? "Card has expired."
+              : "",
+    cardCvc:
+      formData.paymentMethod !== "card"
+        ? ""
+        : !cleanCvc
+          ? "Security code (CVC) is required."
+          : !/^\d{3,4}$/.test(cleanCvc)
+            ? "CVC must be 3 or 4 digits."
+            : "",
   }
   const shippingValid =
-    formData.firstName.trim() !== "" &&
-    formData.lastName.trim() !== "" &&
-    /.+@.+\..+/.test(formData.email.trim()) &&
-    formData.address.trim() !== "" &&
-    formData.city.trim() !== "" &&
-    formData.postalCode.trim() !== ""
+    !fieldErrors.firstName &&
+    !fieldErrors.lastName &&
+    !fieldErrors.email &&
+    !fieldErrors.address &&
+    !fieldErrors.city &&
+    !fieldErrors.postalCode
   const paymentValid =
     formData.paymentMethod !== "card" ||
-    (formData.cardNumber.replace(/\D/g, "").length >= 12 &&
-      formData.cardExp.trim().length >= 4 &&
-      formData.cardCvc.trim().length >= 3)
+    (!fieldErrors.cardNumber && !fieldErrors.cardExp && !fieldErrors.cardCvc)
 
   const handleApplyPromo = async () => {
-    if (!promoCode.trim() || promoChecking) return
+    if (promoChecking) return
+    if (!promoCode.trim()) {
+      setPromoApplied(false)
+      setPromoPercent(0)
+      setPromoError("Enter a promo code first.")
+      return
+    }
     setPromoChecking(true)
     setPromoError("")
     try {
@@ -171,6 +229,8 @@ export function CheckoutExperience() {
         setPromoPercent(0)
         setPromoError(res.error)
       }
+    } catch {
+      setPromoError("Could not verify promo code right now.")
     } finally {
       setPromoChecking(false)
     }
@@ -208,10 +268,32 @@ export function CheckoutExperience() {
       cardExp: "08/28",
       cardCvc: "123",
     }))
+    setTouched((prev) => ({ ...prev, cardNumber: true, cardExp: true, cardCvc: true }))
   }
 
   const handlePlaceOrder = async () => {
-    if (isProcessing || selectedItems.length === 0 || !shippingValid || !paymentValid) return
+    if (isProcessing || selectedItems.length === 0) return
+    if (!shippingValid) {
+      setStep("shipping")
+      setTouched((prev) => ({
+        ...prev,
+        firstName: true,
+        lastName: true,
+        email: true,
+        address: true,
+        city: true,
+        postalCode: true,
+      }))
+      showToast("Please fix your shipping details to continue.", "error")
+      return
+    }
+    if (!paymentValid) {
+      const payKeys = ["cardNumber", "cardExp", "cardCvc"] as const
+      setTouched((prev) => ({ ...prev, cardNumber: true, cardExp: true, cardCvc: true }))
+      const firstBad = payKeys.find((k) => fieldErrors[k])
+      if (firstBad) showToast(fieldErrors[firstBad], "error")
+      return
+    }
     setIsProcessing(true)
     window.dispatchEvent(new CustomEvent("start-delivery-loading", { detail: { message: "Processing Order" } }))
     const { order, field } = await placeOrder(
@@ -355,9 +437,9 @@ export function CheckoutExperience() {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
-          {/* ================= LEFT: MASCOT (framed card like login with its own background) ================= */}
-          <div className="w-full lg:col-span-6 flex flex-col justify-center">
-            <div className="relative flex items-center justify-center w-full rounded-[20px] overflow-hidden bg-white border border-[#ecedec] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.12)] select-none pointer-events-none">
+          {/* ================= LEFT: MASCOT (exact height/width match with checkout form) ================= */}
+          <div className="w-full lg:col-span-6 flex">
+            <div className="relative w-full flex-1 min-h-[240px] sm:min-h-[320px] lg:min-h-0 rounded-2xl overflow-hidden bg-[#f4f4f4] border border-neutral-100 shadow-[0_18px_48px_-12px_rgba(0,0,0,0.12)] select-none pointer-events-none">
               <video
                 ref={mascotVideoRef}
                 src="/videos/mascot/checkout.mp4"
@@ -372,12 +454,9 @@ export function CheckoutExperience() {
                 onContextMenu={(e) => e.preventDefault()}
                 preload="auto"
                 aria-label="Store mascot with shopping cart"
-                className="w-full h-auto max-h-[580px] object-contain pointer-events-none select-none block"
+                className="w-full h-full lg:absolute lg:inset-0 object-cover object-center pointer-events-none select-none block"
               />
             </div>
-            <p className="mt-3 text-center text-[11px] font-bold uppercase tracking-widest text-neutral-400">
-              Secure checkout
-            </p>
           </div>
 
           {/* ================= RIGHT: MULTI-STEP CHECKOUT ================= */}
@@ -500,8 +579,12 @@ export function CheckoutExperience() {
                       <input
                         type="text"
                         placeholder="Promo code"
+                        maxLength={24}
                         value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
+                        onChange={(e) => {
+                          setPromoCode(e.target.value.toUpperCase())
+                          if (promoError) setPromoError("")
+                        }}
                         className="flex-1 text-xs bg-[#f4f5f7] rounded-lg px-3.5 py-2.5 outline-none border border-transparent focus:border-neutral-300"
                       />
                       <button
@@ -690,11 +773,18 @@ export function CheckoutExperience() {
                           required
                           inputMode="numeric"
                           autoComplete="cc-number"
+                          maxLength={23}
                           placeholder="•••• •••• •••• 4242"
                           value={formData.cardNumber}
-                          onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, "").slice(0, 19)
+                            const grouped = digits.replace(/(.{4})/g, "$1 ").trim()
+                            setFormData({ ...formData, cardNumber: grouped })
+                          }}
+                          onBlur={() => markTouched("cardNumber")}
                           className="w-full bg-[#f4f5f7] rounded-lg px-3.5 py-3 text-sm outline-none border border-transparent focus:border-neutral-300 font-mono"
                         />
+                        {touched.cardNumber && <FieldError message={fieldErrors.cardNumber} />}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -703,11 +793,19 @@ export function CheckoutExperience() {
                             required
                             inputMode="numeric"
                             autoComplete="cc-exp"
-                            placeholder="08/28"
+                            maxLength={5}
+                            placeholder="MM/YY"
                             value={formData.cardExp}
-                            onChange={(e) => setFormData({ ...formData, cardExp: e.target.value })}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, "").slice(0, 4)
+                              const formatted =
+                                digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits
+                              setFormData({ ...formData, cardExp: formatted })
+                            }}
+                            onBlur={() => markTouched("cardExp")}
                             className="w-full bg-[#f4f5f7] rounded-lg px-3.5 py-3 text-sm outline-none border border-transparent focus:border-neutral-300 font-mono"
                           />
+                          {touched.cardExp && <FieldError message={fieldErrors.cardExp} />}
                         </div>
                         <div>
                           <label className="block text-neutral-600 mb-1 font-medium">CVC</label>
@@ -715,11 +813,19 @@ export function CheckoutExperience() {
                             required
                             inputMode="numeric"
                             autoComplete="cc-csc"
+                            maxLength={4}
                             placeholder="•••"
                             value={formData.cardCvc}
-                            onChange={(e) => setFormData({ ...formData, cardCvc: e.target.value })}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                cardCvc: e.target.value.replace(/\D/g, "").slice(0, 4),
+                              })
+                            }
+                            onBlur={() => markTouched("cardCvc")}
                             className="w-full bg-[#f4f5f7] rounded-lg px-3.5 py-3 text-sm outline-none border border-transparent focus:border-neutral-300 font-mono"
                           />
+                          {touched.cardCvc && <FieldError message={fieldErrors.cardCvc} />}
                         </div>
                       </div>
                     </div>
@@ -796,8 +902,7 @@ export function CheckoutExperience() {
                   </button>
                   <button
                     onClick={handlePlaceOrder}
-                    disabled={isProcessing || !shippingValid || !paymentValid}
-                    title={!paymentValid ? "Enter your card details" : undefined}
+                    disabled={isProcessing}
                     className="flex-1 bg-black hover:bg-neutral-800 disabled:opacity-60 text-white font-semibold py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
                   >
                     {isProcessing ? (

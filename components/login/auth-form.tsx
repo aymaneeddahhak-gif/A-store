@@ -19,6 +19,7 @@ type AuthFormProps = {
   showPassword: boolean
   isLoading: boolean
   isGoogleLoading: boolean
+  fieldErrors?: { username?: string; email?: string; password?: string }
   feedback: AuthFeedback | null
   onEmailChange: (value: string) => void
   onPasswordChange: (value: string) => void
@@ -39,6 +40,7 @@ export function AuthForm({
   showPassword,
   isLoading,
   isGoogleLoading,
+  fieldErrors,
   feedback,
   onEmailChange,
   onPasswordChange,
@@ -53,7 +55,7 @@ export function AuthForm({
   const [rememberMe, setRememberMe] = useState(true)
 
   return (
-    <form className="uiverse-login-form" onSubmit={onSubmit}>
+    <form className="uiverse-login-form" onSubmit={onSubmit} noValidate>
       {/* Role quick sign-in cards at the TOP of the login card */}
       <div className="grid grid-cols-2 gap-3 mb-1">
         {DEMO_ACCOUNTS.map((account) => (
@@ -85,6 +87,7 @@ export function AuthForm({
               id="auth-fullname"
               type="text"
               required
+              maxLength={60}
               value={username}
               onChange={(e) => onUsernameChange(e.target.value)}
               className="uiverse-login-input"
@@ -92,6 +95,9 @@ export function AuthForm({
               autoComplete="name"
             />
           </div>
+          {fieldErrors?.username && (
+            <p className="text-[11px] font-medium text-red-500 -mt-1">{fieldErrors.username}</p>
+          )}
         </>
       )}
 
@@ -122,6 +128,9 @@ export function AuthForm({
           autoComplete="email"
         />
       </div>
+      {fieldErrors?.email && (
+        <p className="text-[11px] font-medium text-red-500 -mt-1">{fieldErrors.email}</p>
+      )}
 
       <div className="uiverse-login-field-label">
         <label htmlFor="auth-password">Password</label>
@@ -142,6 +151,7 @@ export function AuthForm({
           id="auth-password"
           type={showPassword ? "text" : "password"}
           required
+          maxLength={72}
           value={password}
           onChange={(e) => onPasswordChange(e.target.value)}
           className="uiverse-login-input"
@@ -165,6 +175,9 @@ export function AuthForm({
           </svg>
         </button>
       </div>
+      {fieldErrors?.password && (
+        <p className="text-[11px] font-medium text-red-500 -mt-1">{fieldErrors.password}</p>
+      )}
 
       <div className="uiverse-login-row">
         <label className="uiverse-login-remember">
