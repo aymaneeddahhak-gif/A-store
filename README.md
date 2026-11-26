@@ -71,14 +71,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🔑 Demo Accounts
+## 🔑 Roles & Access
 
-For testing the platform's multi-role capabilities, visit `/login`:
+Visit `/login` to try the platform with one-click isolated visitor sessions, or register with your own Email / Google account for permanent Supabase history:
 
-| Role | Email | Capabilities |
-|------|-------|--------------|
-| **Seller** | `seller@a-store.shop` | Seller dashboard exploration, isolated product sandbox, and order management. |
-| **Client** | `customer@a-store.shop` | Shopping cart, promo codes, checkout, and order tracking. |
+| Role | Access | Capabilities |
+|------|--------|--------------|
+| **Client** | One-click at `/login` (per-visitor isolated session) or Email / Google Sign-Up | Browse live products, save favourites, post reviews, apply promo codes, place orders, and track order history in `/profile`. |
+| **Seller** | One-click at `/login` (per-visitor isolated Supabase sandbox) | Create, edit, restock, and delete their own products, apply/clear offers on their own products, and manage order fulfillment in `/seller`. Edits stay isolated from the main storefront. |
+| **Admin** | Private (developer only — no public credentials) | Only the developer/store owner has access to manage the original store product catalog, homepage featured showcase, global offers, store settings, and audit logs. |
 
 ---
 
