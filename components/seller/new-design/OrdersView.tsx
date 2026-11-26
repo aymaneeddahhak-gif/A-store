@@ -19,6 +19,7 @@ import {
 import type { Order } from "@/lib/types"
 import { TRACKING_REQUIRED_STATUSES, orderNextStatuses } from "@/lib/types"
 import { VectorAvatar, avatarVariantForEmail } from "@/components/avatars/role-avatar"
+import { orderStatusBadgeClass } from "@/components/orders/order-status"
 
 /** Short display id — works for legacy ord_<ts>_<rand> and plain UUIDs. */
 export function shortOrderId(id: string) {
@@ -32,15 +33,6 @@ export interface OrderBuyer {
   email: string
 }
 
-const STATUS_PILLS: Record<string, string> = {
-  Pending: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-  Confirmed: "bg-[#98e4af]/25 text-gray-900 dark:text-[#98e4af]",
-  Processing: "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300",
-  Shipped: "bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300",
-  Delivered: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-  Cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300",
-}
-
 const STATUS_TABS = [
   "All",
   "Pending",
@@ -52,7 +44,7 @@ const STATUS_TABS = [
 ]
 
 function pillClass(status: string) {
-  return STATUS_PILLS[status] ?? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+  return orderStatusBadgeClass(status)
 }
 
 function formatDate(iso: string) {
@@ -325,7 +317,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 value=""
                 onChange={(e) => handleStatusPick(order, e.target.value)}
                 aria-label={`Change the status of order ${shortOrderId(order.id)}`}
-                className={`appearance-none pl-3 pr-7 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer outline-none ${pillClass(
+                className={`appearance-none pl-3 pr-7 py-1.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wider cursor-pointer outline-none ${pillClass(
                   order.status
                 )}`}
               >

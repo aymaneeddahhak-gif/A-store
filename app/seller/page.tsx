@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { NewSellerDashboard } from "@/components/seller/new-seller-dashboard"
+import { SellerPageShell } from "@/components/seller/seller-page-shell"
 
 export const metadata: Metadata = {
   title: "Seller Console",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function SellerPage() {
-  return <NewSellerDashboard />
+  return <SellerPageShell />
 }

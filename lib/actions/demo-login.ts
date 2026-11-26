@@ -35,7 +35,6 @@ export async function demoSessionLoginAction(accountId: DemoAccountId): Promise<
   const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)
   if (!account) return { ok: false, error: "Unknown demo account." }
 
-  const isAdmin = accountId === "demo_admin"
   const isSeller = accountId === "demo_seller"
 
   let demoIdentity: { id: string; email: string; fullName: string }
@@ -54,21 +53,21 @@ export async function demoSessionLoginAction(accountId: DemoAccountId): Promise<
       demoIdentity = {
         id: existing.id,
         email: account.email,
-        fullName: "Demo Seller",
+        fullName: "Seller",
       }
     } else {
       const provisioned = await provisionDemoSellerSession()
       demoIdentity = {
         id: provisioned.id,
         email: provisioned.email,
-        fullName: provisioned.fullName,
+        fullName: "Seller",
       }
     }
   } else {
     demoIdentity = {
-      id: isAdmin ? "admin-official-id" : "demo-customer-id",
+      id: "demo-customer-id",
       email: account.email,
-      fullName: isAdmin ? "Store Admin" : "Alex Customer",
+      fullName: "Alex Customer",
     }
   }
 

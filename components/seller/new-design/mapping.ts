@@ -1,5 +1,6 @@
 import type { Order, Product } from "@/lib/types"
-import type { ProductItem } from "./types"
+import type { ColorOption, ProductItem } from "./types"
+import { getProductVariantConfig } from "@/components/storefront/product-adapter"
 
 export function stockStatus(stock: number): ProductItem["status"] {
   if (stock <= 0) return "Out of Stock"
@@ -26,6 +27,18 @@ export function toProductItem(p: Product): ProductItem {
       ? Math.round((1 - p.price / p.original_price) * 100)
       : 0
   const images = [p.image, ...(p.images ?? [])].filter(Boolean)
+  const resolvedColors: ColorOption[] =
+    p.custom_colors && p.custom_colors.length > 0
+      ? p.custom_colors.map((c) => ({
+          name: c.name,
+          hex: c.hex,
+          ...(c.image ? { image: c.image } : {}),
+        }))
+      : getProductVariantConfig(p).colors.map((c) => ({
+          name: c.name,
+          hex: c.hex,
+          ...(c.image ? { image: c.image } : {}),
+        }))
   return {
     id: String(p.id),
     name: p.name,
@@ -37,7 +50,8 @@ export function toProductItem(p: Product): ProductItem {
     category: p.category,
     gender: "Unisex",
     sizes: p.custom_sizes?.length ? p.custom_sizes : ["M"],
-    colors: (p.custom_colors ?? []).map((c) => c.name),
+    colors: resolvedColors.map((c) => c.name),
+    colorOptions: resolvedColors,
     sku: `SKU-${p.id}`,
     productType: p.category,
     images: images.length ? images : [p.image],
@@ -59,7 +73,7 @@ export function toProductPayload(form: {
   images: string[]
   selectedSizes: string[]
   selectedColors: string[]
-  availableColors: { name: string; hex: string }[]
+  availableColors: ColorOption[]
 }): Omit<Product, "id" | "likes" | "rating" | "reviews"> {
   const price = parsePrice(form.basePrice)
   const discountPct = parseDiscount(form.discount)
@@ -77,10 +91,14 @@ export function toProductPayload(form: {
     images: [...new Set(rest)].slice(0, 6),
     stock,
     is_published: true,
-    custom_colors: form.selectedColors.map((name) => ({
-      name,
-      hex: form.availableColors.find((c) => c.name === name)?.hex ?? "#888888",
-    })),
+    custom_colors: form.selectedColors.map((name) => {
+      const match = form.availableColors.find((c) => c.name.toLowerCase() === name.toLowerCase())
+      return {
+        name,
+        hex: match?.hex ?? "#888888",
+        ...(match?.image ? { image: match.image } : {}),
+      }
+    }),
     custom_sizes: form.selectedSizes,
   }
 }

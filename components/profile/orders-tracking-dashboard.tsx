@@ -16,6 +16,7 @@ import {
   Search,
 } from 'lucide-react';
 import type { Order } from '@/lib/types';
+import { orderStatusBadgeClass } from '@/components/orders/order-status';
 
 /** App statuses mapped onto the design's status vocabulary. */
 function toDesignStatus(status: string): OrderStatus {
@@ -46,15 +47,6 @@ export interface TrackingStep {
   isExpanded?: boolean;
   events?: { time: string; text: string }[];
 }
-
-const STATUS_PILL_STYLES: Record<OrderStatus, string> = {
-  'In Transit': 'bg-blue-500/12 text-blue-600 border-blue-500/35',
-  Delivered: 'bg-zinc-900/10 text-zinc-800 border-zinc-500/35',
-  Shipped: 'bg-indigo-500/12 text-indigo-600 border-indigo-500/35',
-  'Order Confirmed': 'bg-emerald-500/12 text-emerald-600 border-emerald-500/35',
-  Pending: 'bg-amber-500/12 text-amber-600 border-amber-500/35',
-  'Cancel Order': 'bg-rose-500/12 text-rose-600 border-rose-500/35',
-};
 
 type ViewMode = 'combined' | 'orders-only' | 'tracking-only';
 
@@ -155,7 +147,7 @@ export default function OrdersTrackingDashboard({ orders }: { orders: Order[] })
     );
   }
 
-  const pill = STATUS_PILL_STYLES[selectedOrder.designStatus] || STATUS_PILL_STYLES['In Transit'];
+  const pill = orderStatusBadgeClass(selectedOrder.designStatus);
   const firstItem = selectedOrder.items[0];
   const itemsCount = selectedOrder.items.reduce((n, i) => n + (i.quantity || 1), 0);
   const eta = selectedOrder.status === 'Delivered'
@@ -271,7 +263,7 @@ export default function OrdersTrackingDashboard({ orders }: { orders: Order[] })
             <div className="space-y-3">
               {filteredOrders.map((order) => {
                 const isSelected = order.id === selectedOrderId;
-                const badgeCls = STATUS_PILL_STYLES[order.designStatus] || STATUS_PILL_STYLES['In Transit'];
+                const badgeCls = orderStatusBadgeClass(order.designStatus);
                 const thumb = order.items[0]?.image;
                 const name = order.items[0]?.name ?? 'Order';
                 return (
@@ -301,7 +293,7 @@ export default function OrdersTrackingDashboard({ orders }: { orders: Order[] })
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-bold text-gray-900">#{order.id.slice(0, 8)}</span>
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold border rounded-full whitespace-nowrap ${badgeCls}`}
+                            className={`inline-flex items-center px-2.5 py-0.5 text-[10.5px] font-bold rounded-[4px] whitespace-nowrap ${badgeCls}`}
                           >
                             {order.designStatus}
                           </span>
@@ -366,7 +358,7 @@ export default function OrdersTrackingDashboard({ orders }: { orders: Order[] })
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-400 font-medium">Status :</span>
                     <span
-                      className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border whitespace-nowrap ${pill}`}
+                      className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-[4px] whitespace-nowrap ${pill}`}
                     >
                       {selectedOrder.designStatus}
                     </span>

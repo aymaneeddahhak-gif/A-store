@@ -101,13 +101,14 @@ export function SellerRestrictedGate({
             className="flex transition-transform duration-700 ease-out"
             style={{ transform: `translateX(-${activeIndex * 100}%)` }}
           >
-            {SELLER_SLIDES.map((slide) => (
+            {SELLER_SLIDES.map((slide, index) => (
               <div key={slide.id} className="w-full min-w-full shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={slide.src}
                   alt={`Seller Dashboard ${slide.label}`}
-                  loading="eager"
+                  loading={index === 0 ? "eager" : "lazy"}
+                  decoding="async"
                   className="w-full h-auto block select-none"
                 />
               </div>

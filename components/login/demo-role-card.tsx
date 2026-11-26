@@ -11,19 +11,16 @@ import type { DemoAccount, DemoAccountId } from "@/lib/demo-accounts"
 const CIRCLE_BG_BY_ROLE: Record<DemoAccountId, string> = {
   demo_seller: "bg-[#16a34a]",
   customer: "bg-[#FF5800]",
-  demo_admin: "bg-[#2563eb]",
 }
 
 export function DemoRoleCard({
   account,
   onSelect,
   disabled,
-  compact = false,
 }: {
   account: DemoAccount
   onSelect: (id: DemoAccountId) => void
   disabled: boolean
-  compact?: boolean
 }) {
   const circleBg = CIRCLE_BG_BY_ROLE[account.id] ?? "bg-[#FF5800]"
 
@@ -32,9 +29,7 @@ export function DemoRoleCard({
       type="button"
       onClick={() => onSelect(account.id)}
       disabled={disabled}
-      className={`${
-        compact ? "h-[4.4em] px-3.5 py-2.5 flex items-center justify-between" : "h-[7.2em] p-3"
-      } w-full bg-white dark:bg-[#1c1f26] border border-[#ededef] dark:border-white/10 rounded-[1em] overflow-hidden relative group z-0 text-left cursor-pointer transition-shadow hover:shadow-md disabled:opacity-55 disabled:cursor-not-allowed`}
+      className="h-[7.2em] p-3 w-full bg-white dark:bg-[#1c1f26] border border-[#ededef] dark:border-white/10 rounded-[1em] overflow-hidden relative group z-0 text-left cursor-pointer transition-shadow hover:shadow-md disabled:opacity-55 disabled:cursor-not-allowed"
     >
       {/* Signature Uiverse expanding corner circle */}
       <span
@@ -53,11 +48,7 @@ export function DemoRoleCard({
       </div>
 
       {/* Action Indicator with Uiverse Underline */}
-      <span
-        className={`text-[0.8em] font-semibold text-[#6C3082] dark:text-[#c084fc] group-hover:text-white transition-colors duration-500 inline-flex items-center gap-1.5 z-20 ${
-          compact ? "relative mr-7" : "absolute bottom-[0.9em] left-[0.95em]"
-        }`}
-      >
+      <span className="text-[0.8em] font-semibold text-[#6C3082] dark:text-[#c084fc] group-hover:text-white transition-colors duration-500 inline-flex items-center gap-1.5 z-20 absolute bottom-[0.9em] left-[0.95em]">
         <span className="relative before:h-[0.16em] before:absolute before:w-full before:content-[''] before:bg-[#6C3082] dark:before:bg-[#c084fc] group-hover:before:bg-white before:transition-colors before:duration-300 before:bottom-0 before:left-0 pb-0.5">
           Demo Login
         </span>

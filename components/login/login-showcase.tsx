@@ -85,18 +85,23 @@ export function LoginShowcase() {
   }, [reducedMotion])
 
   return (
-    <div className="relative flex items-start justify-center w-full select-none pointer-events-none">
+    <div className="relative flex items-center justify-center w-full rounded-[20px] overflow-hidden bg-white border border-[#ecedec] dark:border-white/10 shadow-[0_18px_48px_-12px_rgba(0,0,0,0.12)] dark:shadow-[0_22px_54px_-12px_rgba(0,0,0,0.55)] select-none pointer-events-none">
       <video
         ref={videoRef}
-        src="/videos/mascot/login.webm"
+        src="/videos/mascot/login.mp4"
         poster="/images/mascot/lion-login.png"
         autoPlay
         loop
         muted
         playsInline
+        controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        onContextMenu={(e) => e.preventDefault()}
         preload="auto"
         aria-label="A-Store mascot welcoming you"
-        className="w-auto h-[840px] max-w-none shrink-0 object-contain -mt-[190px]"
+        className="w-full h-auto max-h-[760px] object-contain pointer-events-none select-none block"
       />
     </div>
   )

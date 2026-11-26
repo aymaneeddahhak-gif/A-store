@@ -59,7 +59,6 @@ detailscard/
 /public/images/logo/A-store.jpg
 
 # local preview / capture state
-.freebuff/
 .dev-log.txt
 .seed-debug-log.txt
 .ui-audit-log.txt
@@ -70,6 +69,7 @@ detailscard/
 .verify-nav.png
 home-top.png
 Cad.PNG
+vidscreenshot/
 
 # local audit / debug scripts and logs
 check-*.mjs

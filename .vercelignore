@@ -24,7 +24,6 @@ opencode.json
 skills-lock.json
 
 # Local logs, debug scripts, and captures
-.freebuff
 .playwright-mcp
 .playwright-*.png
 .dev-log.txt
@@ -42,6 +41,7 @@ newdesing
 newchckoutpagedesing
 newsellerdahbord
 detailscard
+vidscreenshot
 
 # Tests, database SQL scripts, docs & formatter config
 tests

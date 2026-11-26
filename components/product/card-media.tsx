@@ -50,8 +50,18 @@ export function CardMedia({
   const [playing, setPlaying] = useState(false)
 
   useEffect(() => {
-    if (active && enabled) setMounted(true)
-  }, [active, enabled])
+    if (!enabled || videoOnly) return
+    if (active) {
+      setMounted(true)
+      return
+    }
+    if (!mounted) return
+    const timer = window.setTimeout(() => {
+      setMounted(false)
+      setPlaying(false)
+    }, 450)
+    return () => window.clearTimeout(timer)
+  }, [active, enabled, mounted, videoOnly])
 
   useEffect(() => {
     const el = videoRef.current
@@ -111,11 +121,16 @@ export function CardMedia({
           loop
           playsInline
           autoPlay
+          controls={false}
+          disablePictureInPicture
+          disableRemotePlayback
+          controlsList="nodownload noplaybackrate noremoteplayback"
           preload={eagerVideo ? "auto" : "metadata"}
           aria-hidden
           tabIndex={-1}
+          onContextMenu={(e) => e.preventDefault()}
           onPlaying={() => setPlaying(true)}
-          className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-500 ${
+          className={`pointer-events-none select-none absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-500 ${
             videoOnly || playing ? "opacity-100" : "opacity-0"
           }`}
         />

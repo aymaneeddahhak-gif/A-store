@@ -5,18 +5,23 @@ import ElectricBorderCard from "@/components/electric-border-card"
 import { DetailExperience } from "@/components/product/detail-experience"
 import { getProductVariantConfig, toStorefrontProduct } from "@/components/storefront/product-adapter"
 import { CATEGORIES } from "@/lib/categories"
-import { getProductById, getRelatedProducts } from "@/lib/queries/products"
+import { getProductById, getRelatedProducts, listStoreProducts } from "@/lib/queries/products"
 import { SITE_URL } from "@/lib/site"
+
+export const revalidate = 900
+export const dynamicParams = true
+
+export async function generateStaticParams() {
+  const products = await listStoreProducts()
+  return products.map((product) => ({ id: String(product.id) }))
+}
 
 type Props = {
   params: Promise<{ id: string }>
-  /** ?edit=1 opens the page in "edit cart item" mode (variant swap, no add). */
-  searchParams: Promise<{ edit?: string }>
 }
 
-export default async function ProductDetailPage({ params, searchParams }: Props) {
+export default async function ProductDetailPage({ params }: Props) {
   const { id } = await params
-  const { edit } = await searchParams
   const productId = Number(id)
 
   if (Number.isNaN(productId)) notFound()
@@ -91,7 +96,6 @@ export default async function ProductDetailPage({ params, searchParams }: Props)
             variantLabel={variantLabel}
             variantOptions={variantOptions}
             showSizes={storefront.category === "sneakers"}
-            editItemId={edit ? product.id : undefined}
           />
         </div>
 

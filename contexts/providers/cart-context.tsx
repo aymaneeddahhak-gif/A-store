@@ -86,12 +86,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         )
       // State updaters must remain pure. This event-side notification runs
       // after the update has been scheduled, never during another render.
+      const variantSummary = [variant?.color, variant?.size ? `Size ${variant.size}` : undefined]
+        .filter(Boolean)
+        .join(" · ")
       showToast(`${product.name} added to cart.`, "success", [
         { label: "Undo", onClick: undoAdd },
         { label: "View Cart", onClick: () => setIsCartOpen(true) },
       ], {
         title: "Added to cart",
-        productName: product.name,
+        productName: variantSummary || undefined,
         price: `$${product.price.toFixed(2)}`,
         icon: "check",
         accent: "emerald",

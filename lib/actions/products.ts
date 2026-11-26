@@ -55,7 +55,7 @@ function sanitizeVariants(input: {
   custom_sizes?: unknown
   images?: unknown
 }): {
-  custom_colors: { name: string; hex: string }[]
+  custom_colors: { name: string; hex: string; image?: string }[]
   custom_sizes: string[]
   images: string[] | undefined
 } {
@@ -64,9 +64,15 @@ function sanitizeVariants(input: {
     .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
     .map((c) => {
       const hex = String(c.hex ?? "")
+      const rawImg = typeof c.image === "string" ? c.image.trim() : ""
+      const safeImg =
+        rawImg && (rawImg.startsWith("/images/") || /^https?:\/\//i.test(rawImg))
+          ? rawImg.slice(0, 500)
+          : undefined
       return {
         name: String(c.name ?? "").trim().slice(0, 30),
         hex: /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : "#888888",
+        ...(safeImg ? { image: safeImg } : {}),
       }
     })
     .filter((c) => c.name !== "")

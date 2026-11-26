@@ -115,11 +115,15 @@ export function MascotSurface({
       <div className="mascot-surface__halo" aria-hidden />
       <video
         ref={videoRef}
-        className="mascot-surface__video"
+        className="mascot-surface__video pointer-events-none select-none"
         muted
         loop
         playsInline
         controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        onContextMenu={(e) => e.preventDefault()}
         preload={priority ? "metadata" : "none"}
         onCanPlay={() => setIsReady(true)}
       >

@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState } from 'react';
-import { Plus, Check, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import Image from 'next/image';
+import { Plus, Check, X, ImagePlus } from 'lucide-react';
 import { ColorOption } from './types';
 
 interface GeneralInfoCardProps {
@@ -18,6 +19,7 @@ interface GeneralInfoCardProps {
   availableColors: ColorOption[];
   onToggleColor: (colorName: string) => void;
   onAddCustomColor: (color: ColorOption) => void;
+  onUpdateColorImage?: (colorName: string, image: string | undefined) => void;
   gender: 'Men' | 'Woman' | 'Unisex';
   onGenderChange: (g: 'Men' | 'Woman' | 'Unisex') => void;
   sku: string;
@@ -40,6 +42,7 @@ export const GeneralInfoCard: React.FC<GeneralInfoCardProps> = ({
   availableColors,
   onToggleColor,
   onAddCustomColor,
+  onUpdateColorImage,
   gender,
   onGenderChange,
   sku,
@@ -53,6 +56,19 @@ export const GeneralInfoCard: React.FC<GeneralInfoCardProps> = ({
   const [isAddingColor, setIsAddingColor] = useState(false);
   const [newColorName, setNewColorName] = useState('');
   const [newColorHex, setNewColorHex] = useState('#6366F1');
+  const [newColorImage, setNewColorImage] = useState<string | undefined>(undefined);
+  const addColorFileRef = useRef<HTMLInputElement>(null);
+  const existingColorFileRef = useRef<HTMLInputElement>(null);
+  const pendingColorTargetRef = useRef<string | null>(null);
+
+  const readImageAsDataUrl = (file: File | undefined, done: (url: string) => void) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (typeof ev.target?.result === 'string') done(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleCreateSize = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,10 +85,15 @@ export const GeneralInfoCard: React.FC<GeneralInfoCardProps> = ({
     e.preventDefault();
     const trimmed = newColorName.trim();
     if (trimmed && !availableColors.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
-      const newColor = { name: trimmed, hex: newColorHex };
+      const newColor: ColorOption = {
+        name: trimmed,
+        hex: newColorHex,
+        ...(newColorImage ? { image: newColorImage } : {}),
+      };
       onAddCustomColor(newColor);
       onToggleColor(trimmed);
       setNewColorName('');
+      setNewColorImage(undefined);
       setIsAddingColor(false);
     }
   };
@@ -144,9 +165,15 @@ export const GeneralInfoCard: React.FC<GeneralInfoCardProps> = ({
               const isSelected = selectedColors.includes(col.name);
               return (
                 <button key={col.name} type="button" onClick={() => onToggleColor(col.name)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${isSelected ? 'ring-1 ring-[#98e4af] bg-[#98e4af]/15 font-semibold' : isDarkMode ? 'bg-[#272a2e] text-gray-300 hover:bg-[#32363b]' : 'bg-[#F3F4F6] text-gray-700 hover:bg-gray-200'}`}>
-                  <span className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0 flex items-center justify-center" style={{ backgroundColor: col.hex }}>
-                    {isSelected && <Check className="w-2.5 h-2.5 text-gray-900" />}
-                  </span>
+                  {col.image ? (
+                    <span className="w-4 h-4 rounded-sm overflow-hidden border border-black/10 shrink-0 relative">
+                      <Image src={col.image} alt={col.name} fill sizes="16px" unoptimized className="object-cover" />
+                    </span>
+                  ) : (
+                    <span className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0 flex items-center justify-center" style={{ backgroundColor: col.hex }}>
+                      {isSelected && <Check className="w-2.5 h-2.5 text-gray-900" />}
+                    </span>
+                  )}
                   <span>{col.name}</span>
                 </button>
               );
@@ -156,9 +183,108 @@ export const GeneralInfoCard: React.FC<GeneralInfoCardProps> = ({
             <form onSubmit={handleCreateColor} className="mt-2.5 flex items-center gap-2 flex-wrap">
               <input type="text" autoFocus value={newColorName} onChange={(e) => setNewColorName(e.target.value)} placeholder="Color Name (e.g. Navy)" className={`px-3 py-1.5 rounded-lg text-xs outline-none ${isDarkMode ? 'bg-[#272a2e] text-white focus:ring-1 focus:ring-[#98e4af]' : 'bg-[#F3F4F6] text-gray-800 focus:bg-white focus:ring-1 focus:ring-[#98e4af]'}`} />
               <input type="color" value={newColorHex} onChange={(e) => setNewColorHex(e.target.value)} className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0.5 bg-transparent" title="Choose Color Hex" />
+              <input
+                ref={addColorFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  readImageAsDataUrl(e.target.files?.[0], (url) => setNewColorImage(url));
+                  e.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => addColorFileRef.current?.click()}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer border ${isDarkMode ? 'border-gray-700 bg-[#272a2e] text-gray-200 hover:bg-[#32363b]' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                title="Attach product image for this color version"
+              >
+                <ImagePlus className="w-3.5 h-3.5" />
+                <span>{newColorImage ? 'Change Photo' : 'Color Photo'}</span>
+              </button>
+              {newColorImage && (
+                <span className="w-8 h-8 rounded-lg overflow-hidden border border-black/10 relative shrink-0">
+                  <Image src={newColorImage} alt="New color preview" fill sizes="32px" unoptimized className="object-cover" />
+                </span>
+              )}
               <button type="submit" className="px-3 py-1.5 rounded-lg bg-[#98e4af] hover:bg-[#88deb3] text-gray-950 text-xs font-bold cursor-pointer">Save</button>
-              <button type="button" onClick={() => { setIsAddingColor(false); setNewColorName(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 cursor-pointer"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={() => { setIsAddingColor(false); setNewColorName(''); setNewColorImage(undefined); }} className="p-1.5 text-gray-400 hover:text-gray-600 cursor-pointer"><X className="w-4 h-4" /></button>
             </form>
+          )}
+          {onUpdateColorImage && selectedColors.length > 0 && (
+            <div className={`mt-3 pt-3 border-t space-y-2 ${isDarkMode ? 'border-gray-800' : 'border-gray-100'}`}>
+              <span className="block text-[11px] font-medium text-gray-400">
+                Extra Color Version Photos (optional — swaps gallery image when customer picks color)
+              </span>
+              <input
+                ref={existingColorFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const targetName = pendingColorTargetRef.current;
+                  readImageAsDataUrl(e.target.files?.[0], (url) => {
+                    if (targetName) onUpdateColorImage(targetName, url);
+                  });
+                  e.target.value = '';
+                }}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {selectedColors.map((colorName) => {
+                  const col = availableColors.find((c) => c.name === colorName);
+                  return (
+                    <div
+                      key={colorName}
+                      className={`flex items-center justify-between gap-2.5 p-2 rounded-xl border ${
+                        isDarkMode ? 'bg-[#272a2e] border-gray-700/70' : 'bg-[#F9FAFB] border-gray-200/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {col?.image ? (
+                          <div className="w-9 h-9 rounded-lg overflow-hidden relative shrink-0 border border-black/10 bg-white">
+                            <Image src={col.image} alt={colorName} fill sizes="36px" unoptimized className="object-cover" />
+                          </div>
+                        ) : (
+                          <span
+                            className="w-9 h-9 rounded-lg shrink-0 border border-black/10 flex items-center justify-center"
+                            style={{ backgroundColor: col?.hex ?? '#888888' }}
+                          />
+                        )}
+                        <span className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                          {colorName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            pendingColorTargetRef.current = colorName;
+                            existingColorFileRef.current?.click();
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-semibold cursor-pointer border ${
+                            isDarkMode
+                              ? 'border-gray-600 text-gray-200 hover:bg-[#32363b]'
+                              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {col?.image ? 'Change' : 'Upload'}
+                        </button>
+                        {col?.image && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateColorImage(colorName, undefined)}
+                            aria-label={`Remove photo for ${colorName}`}
+                            className="p-1 text-gray-400 hover:text-red-500 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
         <div className="pt-2">

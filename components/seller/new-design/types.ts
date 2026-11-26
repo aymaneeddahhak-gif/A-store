@@ -10,6 +10,7 @@ export interface ProductItem {
   gender: "Men" | "Woman" | "Unisex"
   sizes: string[]
   colors: string[]
+  colorOptions?: ColorOption[]
   sku: string
   productType: string
   images: string[]
@@ -23,4 +24,5 @@ export interface ProductItem {
 export interface ColorOption {
   name: string
   hex: string
+  image?: string
 }

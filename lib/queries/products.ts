@@ -20,7 +20,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 function createAnonClient() {
   return createClient(supabaseUrl!, supabaseAnonKey!, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: createResilientFetch({ noStore: true }) },
+    global: { fetch: createResilientFetch() },
   })
 }
 

@@ -581,7 +581,7 @@ export const ProductsListView: React.FC<ProductsListViewProps> = ({
               }`}
             >
               <div>
-                <div className="w-full aspect-4/3 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center relative">
+                <div className="w-full aspect-square rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center relative">
                   <Image
                     src={prod.images[0] || prod.images[1]}
                     alt={prod.name}

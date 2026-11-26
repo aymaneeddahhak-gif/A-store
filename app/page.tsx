@@ -1,12 +1,24 @@
 import { StoreFront } from "@/components/storefront/store-front"
+import { listCategoriesAction } from "@/lib/actions/categories"
 import { getDealsPopupAction } from "@/lib/actions/deals-popup"
+import { listStoreProducts } from "@/lib/queries/products"
+
+export const revalidate = 300
 
 export default async function HomePage() {
-  // Popup copy comes from the server so the client never fetches on mount
-  // (a server action called from a client effect broke the static build).
-  const deals = await getDealsPopupAction()
+  // Fetch storefront catalog, categories, and deals config in parallel on `/`
+  // (cached on globalThis) instead of RootLayout, so /login, /seller, /profile,
+  // /checkout, and /orders stay statically buildable and prefetch instantly.
+  const [products, categoriesRes, deals] = await Promise.all([
+    listStoreProducts(),
+    listCategoriesAction().catch(() => ({ ok: false as const, error: "unavailable" })),
+    getDealsPopupAction(),
+  ])
+
   return (
     <StoreFront
+      initialProducts={products}
+      initialCategories={categoriesRes.ok ? categoriesRes.data : []}
       initialDealsConfig={
         deals.ok
           ? deals.data

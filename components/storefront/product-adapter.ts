@@ -100,7 +100,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "airpods.png": {
     colors: [
       { name: "Pearl White", hex: "#e4e4e7", image: "/images/product/airpods.png" },
-      { name: "Matte Black", hex: "#1f232b", image: "/images/product/variants/airpods-dark.png" },
+      { name: "Matte Black", hex: "#1f232b", image: "/images/product/variants/airpods-dark.webp" },
     ],
     variantLabel: "Edition",
     variantOptions: ["Standard ANC", "Studio Pro"],
@@ -108,7 +108,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "RMADRIDKIT.png": {
     colors: [
       { name: "Home White", hex: "#f3f4f6", image: "/images/product/RMADRIDKIT.png" },
-      { name: "Away Obsidian", hex: "#1e293b", image: "/images/product/variants/RMADRIDKIT-dark.png" },
+      { name: "Away Obsidian", hex: "#1e293b", image: "/images/product/variants/RMADRIDKIT-dark.webp" },
     ],
     variantLabel: "Size",
     variantOptions: ["S", "M", "L", "XL", "XXL"],
@@ -116,7 +116,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "sneakers.png": {
     colors: [
       { name: "Cloud White", hex: "#f4f4f5", image: "/images/product/sneakers.png" },
-      { name: "Midnight Black", hex: "#272d38", image: "/images/product/variants/sneakers-dark.png" },
+      { name: "Solar Gold", hex: "#eab308", image: "/images/product/variants/sneakers-gold.webp" },
     ],
     variantLabel: "Size",
     variantOptions: ["40.5", "41", "42", "43", "44", "45"],
@@ -124,7 +124,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "Croisant.png": {
     colors: [
       { name: "Golden Butter", hex: "#d4883a", image: "/images/product/Croisant.png" },
-      { name: "Dark Cocoa", hex: "#4a2614", image: "/images/product/variants/Croisant-choco.png" },
+      { name: "Dark Cocoa", hex: "#4a2614", image: "/images/product/variants/Croisant-choco.webp" },
     ],
     variantLabel: "Pack",
     variantOptions: ["Single", "Box of 4", "Box of 8"],
@@ -132,7 +132,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "iphone-17.png": {
     colors: [
       { name: "Cosmic Orange", hex: "#e57034", image: "/images/product/iphone-17.png" },
-      { name: "Black Titanium", hex: "#26282c", image: "/images/product/variants/iphone-17-black.png" },
+      { name: "Black Titanium", hex: "#26282c", image: "/images/product/variants/iphone-17-black.webp" },
     ],
     variantLabel: "Storage",
     variantOptions: ["256GB", "512GB", "1TB"],
@@ -140,7 +140,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "bluejacket.png": {
     colors: [
       { name: "Cobalt Blue", hex: "#0b75b8", image: "/images/product/bluejacket.png" },
-      { name: "Obsidian Charcoal", hex: "#26292e", image: "/images/product/variants/bluejacket-dark.png" },
+      { name: "Obsidian Charcoal", hex: "#26292e", image: "/images/product/variants/bluejacket-dark.webp" },
     ],
     variantLabel: "Size",
     variantOptions: ["S", "M", "L", "XL"],
@@ -148,7 +148,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "S-kacket.png": {
     colors: [
       { name: "Camel Gold", hex: "#b88a4a", image: "/images/product/S-kacket.png" },
-      { name: "Crimson Red", hex: "#9b1c24", image: "/images/product/variants/S-kacket-crimson.png" },
+      { name: "Black & Gold", hex: "#1c1917", image: "/images/product/variants/S-kacket-dark.webp" },
     ],
     variantLabel: "Size",
     variantOptions: ["S", "M", "L", "XL"],
@@ -156,7 +156,6 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "laptop.png": {
     colors: [
       { name: "Space Gray", hex: "#4b5563", image: "/images/product/laptop.png" },
-      { name: "Silver Titanium", hex: "#cbd5e1", image: "/images/product/variants/laptop-silver.png" },
     ],
     variantLabel: "Memory / SSD",
     variantOptions: ["16GB · 512GB", "32GB · 1TB", "64GB · 2TB"],
@@ -164,7 +163,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "umbrella.png": {
     colors: [
       { name: "Crimson Red", hex: "#e63946", image: "/images/product/umbrella.png" },
-      { name: "Midnight Black", hex: "#1f242d", image: "/images/product/variants/umbrella-black.png" },
+      { name: "Midnight Black", hex: "#1f242d", image: "/images/product/variants/umbrella-black.webp" },
     ],
     variantLabel: "Canopy",
     variantOptions: ['Compact 42"', 'Full 48"'],
@@ -172,7 +171,7 @@ const VARIANT_CONFIG_BY_IMAGE: Record<string, ProductVariantConfig> = {
   "weddg.png": {
     colors: [
       { name: "Ivory Lace", hex: "#f4efe6", image: "/images/product/weddg.png" },
-      { name: "Rose Blush", hex: "#e8b4be", image: "/images/product/variants/weddg-blush.png" },
+      { name: "Rose Blush", hex: "#e8b4be", image: "/images/product/variants/weddg-blush.webp" },
     ],
     variantLabel: "Size",
     variantOptions: ["XS", "S", "M", "L", "XL"],

@@ -7,8 +7,6 @@ import { SiteFooter } from "@/components/site-footer"
 import { Providers } from "@/contexts/providers"
 import { GlobalOverlays } from "@/components/global-overlays"
 import { NavigationProgress } from "@/components/navigation-progress"
-import { listStoreProducts } from "@/lib/queries/products"
-import { listCategoriesAction } from "@/lib/actions/categories"
 import { SITE_URL } from "@/lib/site"
 
 const siteUrl = SITE_URL
@@ -50,18 +48,11 @@ export const viewport: Viewport = {
 
 const THEME_INIT_SCRIPT = `try{var d=document.documentElement,t=localStorage.getItem("theme");d.classList.toggle("dark",t==="dark")}catch(e){}`
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const initialProductsPromise = listStoreProducts()
-  const initialCategoriesPromise = listCategoriesAction()
-    .then((res) => (res.ok ? res.data : []))
-    .catch(() => [])
-  void initialProductsPromise
-  void initialCategoriesPromise
-
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -81,10 +72,7 @@ export default async function RootLayout({
         >
           Skip to content
         </a>
-        <Providers
-          initialProductsPromise={initialProductsPromise}
-          initialCategoriesPromise={initialCategoriesPromise}
-        >
+        <Providers>
           <NavigationProgress />
           <GlobalOverlays />
 

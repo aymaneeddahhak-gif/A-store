@@ -29,7 +29,7 @@ function NotchFillet({ className }: { className: string }) {
   )
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({
+export const ProductCard: React.FC<ProductCardProps> = React.memo(({
   product,
   priority = false,
   onToggleWishlist,
@@ -75,7 +75,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   }
 
   return (
-    <article className="group relative w-full max-w-sm sm:max-w-md bg-[#eff4f4] dark:bg-[var(--card)] rounded-[30px] p-2.5 sm:p-3 overflow-visible border border-[#e0e9e9] dark:border-[var(--border-color)] shadow-[0_6px_24px_-8px_rgba(31,45,45,0.08)] hover:shadow-[0_14px_34px_-10px_rgba(31,45,45,0.16)] transition-all duration-300 font-sans flex flex-col">
+    <article className="card-perf-contain group relative w-full max-w-sm sm:max-w-md bg-[#eff4f4] dark:bg-[var(--card)] rounded-[30px] p-2.5 sm:p-3 overflow-visible border border-[#e0e9e9] dark:border-[var(--border-color)] shadow-[0_6px_24px_-8px_rgba(31,45,45,0.08)] hover:shadow-[0_14px_34px_-10px_rgba(31,45,45,0.16)] transition-shadow duration-300 font-sans flex flex-col">
       {isPremium && <span aria-hidden className="premium-corner-ribbon" />}
 
       {/* 1. Framed Media Stage: Top-Left Offer, Top-Right Concave Price Notch, Bottom Status Strip */}
@@ -83,15 +83,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <Link
           href={productHref}
           prefetch={false}
-          className={`relative block w-full h-full flex items-center justify-center ${
-            onOpenProduct ? "cursor-pointer" : ""
-          }`}
-          onClick={openProduct}
+          className="relative block w-full h-full flex items-center justify-center cursor-pointer"
           onPointerEnter={(e) => {
             if (e.pointerType !== "mouse") return
             setHovered(true)
             router.prefetch(productHref)
           }}
+          onFocus={() => router.prefetch(productHref)}
           onPointerLeave={() => setHovered(false)}
         >
           <div className="relative w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out">
@@ -175,7 +173,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           }}
           aria-label={liked ? `Remove ${product.title} from wishlist` : `Add ${product.title} to wishlist`}
           aria-pressed={liked}
-          className="absolute bottom-10 right-2.5 z-20 w-8 h-8 rounded-full bg-white/90 dark:bg-neutral-900/80 backdrop-blur-sm shadow-sm flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-red-500 hover:bg-white transition-colors cursor-pointer"
+          className="absolute bottom-10 right-2.5 z-20 w-8 h-8 rounded-full bg-white/95 dark:bg-neutral-900/95 shadow-sm flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-red-500 hover:bg-white transition-colors cursor-pointer"
         >
           <Heart
             className={`w-4 h-4 transition-colors ${
@@ -262,4 +260,5 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
     </article>
   )
-}
+})
+ProductCard.displayName = "ProductCard"

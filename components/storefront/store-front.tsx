@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -8,6 +8,7 @@ import { PackageSearch } from "lucide-react"
 import { useCatalog } from "@/contexts/providers/catalog-context"
 import { useLikes } from "@/contexts/providers/likes-context"
 import { useCart } from "@/contexts/providers/cart-context"
+import type { Product } from "@/lib/types"
 import type { FilterState, SortBy } from "@/lib/storefront/types"
 import type { DealsPopupConfig } from "@/lib/actions/deals-popup"
 import { FilterCapsulesBar } from "@/components/storefront/filter-capsules-bar"
@@ -38,11 +39,36 @@ const DEFAULT_FILTERS = {
  * and search live in the catalog context (shared with the top nav, sidebar,
  * and mobile nav); sort and deal toggles are local to this page.
  */
-export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsPopupConfig }) {
+export function StoreFront({
+  initialProducts = [],
+  initialCategories = [],
+  initialDealsConfig,
+}: {
+  initialProducts?: Product[]
+  initialCategories?: { id: string; label: string }[]
+  initialDealsConfig?: DealsPopupConfig
+}) {
   const router = useRouter()
-  const { products, selectedCategory, setCategory, searchQuery, setSearchQuery, categories } = useCatalog()
+  const {
+    products: catalogProducts,
+    seedCatalog,
+    selectedCategory,
+    setCategory,
+    searchQuery,
+    setSearchQuery,
+    categories,
+  } = useCatalog()
   const { likedProducts, toggleLike } = useLikes()
   const { addToCart } = useCart()
+
+  // Seed CatalogContext once from SSR props without overwriting newer client mutations.
+  useEffect(() => {
+    seedCatalog(initialProducts, initialCategories)
+  }, [initialProducts, initialCategories, seedCatalog])
+
+  const products = catalogProducts.length > 0 ? catalogProducts : initialProducts
+  const productsRef = useRef(products)
+  productsRef.current = products
 
   // The moving hero only belongs on the unfiltered storefront. As soon as a
   // category or a search is active, it steps aside for a category header so
@@ -207,17 +233,26 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
     setDealsOnly(false)
   }
 
-  const handleToggleWishlist = (id: string) => {
-    const storeProduct = products.find((product) => String(product.id) === id)
-    if (storeProduct) toggleLike(storeProduct)
-  }
+  const handleToggleWishlist = useCallback(
+    (id: string) => {
+      const storeProduct = productsRef.current.find((product) => String(product.id) === id)
+      if (storeProduct) toggleLike(storeProduct)
+    },
+    [toggleLike]
+  )
 
-  const handleAddToCart = (id: string) => {
-    const storeProduct = products.find((product) => String(product.id) === id)
-    if (storeProduct) addToCart(storeProduct)
-  }
+  const handleAddToCart = useCallback(
+    (id: string) => {
+      const storeProduct = productsRef.current.find((product) => String(product.id) === id)
+      if (storeProduct) addToCart(storeProduct)
+    },
+    [addToCart]
+  )
 
-  const handleOpenProduct = (id: string) => router.push(`/product/${id}`)
+  const handleOpenProduct = useCallback(
+    (id: string) => router.push(`/product/${id}`),
+    [router]
+  )
 
   // Show the smooth CartLoader from first paint / SSR onward until products arrive,
   // preventing the Filter Bar jump and grey skeleton flash on reload.
@@ -226,7 +261,7 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
       <div
         role="status"
         aria-live="polite"
-        className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-[#faf7f2]/92 dark:bg-[#0b0d11]/90 backdrop-blur-md"
+        className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-[#faf7f2]/92 dark:bg-[#0b0d11]/90"
       >
         <CartLoader message="Loading" />
       </div>
@@ -243,7 +278,7 @@ export function StoreFront({ initialDealsConfig }: { initialDealsConfig?: DealsP
       <main className="w-full">
         {/* 1. FULL-WIDTH MOVING PRODUCT HERO SECTION — hidden while a
             category or search is active so results start at the top. */}
-        {!isFiltering && <HeroShowcase />}
+        {!isFiltering && <HeroShowcase initialProducts={products} />}
 
         {/* 2. FILTER CAPSULES BAR */}
         <header

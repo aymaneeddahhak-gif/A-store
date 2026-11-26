@@ -34,6 +34,7 @@ import { CATEGORIES as DEFAULT_CATEGORIES, mergeCategories } from "@/lib/categor
 type CatalogContextValue = {
   products: Product[]
   categories: { id: string; label: string }[]
+  seedCatalog: (rows: Product[], dbCategories?: { id: string; label: string }[]) => void
   refreshCategories: () => Promise<void>
   createCategory: (label: string) => Promise<{ ok: boolean; error?: string }>
   selectedCategory: string
@@ -56,43 +57,32 @@ type CatalogContextValue = {
 
 const CatalogContext = createContext<CatalogContextValue | undefined>(undefined)
 
-export function CatalogProvider({
-  children,
-  productsPromise,
-  categoriesPromise,
-}: {
-  children: ReactNode
-  /** Server-started catalog read, streamed in — the UI never waits for it. */
-  productsPromise?: Promise<Product[]>
-  /** Server-started categories read, streamed in without a mount POST action. */
-  categoriesPromise?: Promise<{ id: string; label: string }[]>
-}) {
+export function CatalogProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast()
   const pathname = usePathname()
-  const skipSupabaseBackground = pathname === "/login"
+  const skipSupabaseBackground = pathname === "/login" || pathname === "/seller"
 
-  // Starts empty — PromiseSeed (below) fills it from the streamed server
-  // promise, so the shell renders instantly while Supabase responds.
   const [products, setProducts] = useState<Product[]>([])
-  /**
-   * Fill from the streamed server read WITHOUT clobbering newer state. The
-   * seed can land after a mutation (an admin saving a product, a stock move,
-   * a pin), and the freshly saved rows are the ones worth keeping — so a
-   * non-empty state always wins over the earlier server snapshot.
-   */
-  const seedProducts = useCallback((rows: Product[]) => {
-    setProducts((prev) => (prev.length > 0 ? prev : rows))
-  }, [])
-  // Category taxonomy: built-ins instantly, DB-added merged in when loaded.
+  // Category taxonomy: built-ins instantly, DB-added merged in when seeded from HomePage.
   const [categories, setCategories] = useState<{ id: string; label: string }[]>([
     ...DEFAULT_CATEGORIES,
   ])
 
-  const seedCategories = useCallback((rows: { id: string; label: string }[]) => {
-    if (rows.length > 0) {
-      setCategories(mergeCategories(DEFAULT_CATEGORIES, rows))
-    }
-  }, [])
+  /**
+   * Seed from HomePage's server-fetched catalog without clobbering newer client
+   * mutations (an admin saving a product, a stock move, or a pin).
+   */
+  const seedCatalog = useCallback(
+    (rows: Product[], dbCategories?: { id: string; label: string }[]) => {
+      if (rows.length > 0) {
+        setProducts((prev) => (prev.length > 0 ? prev : rows))
+      }
+      if (dbCategories && dbCategories.length > 0) {
+        setCategories(mergeCategories(DEFAULT_CATEGORIES, dbCategories))
+      }
+    },
+    []
+  )
 
   const refreshCategories = useCallback(async () => {
     const res = await listCategoriesAction()
@@ -248,6 +238,7 @@ export function CatalogProvider({
     () => ({
       products,
       categories,
+      seedCatalog,
       refreshCategories,
       createCategory,
       selectedCategory,
@@ -262,44 +253,10 @@ export function CatalogProvider({
       deleteProduct,
       addReview,
     }),
-    [products, categories, refreshCategories, createCategory, selectedCategory, searchQuery, setCategory, setSearchQuery, setProductLikes, patchProductLocal, refreshProducts, addProduct, updateProduct, deleteProduct, addReview]
+    [products, categories, seedCatalog, refreshCategories, createCategory, selectedCategory, searchQuery, setCategory, setSearchQuery, setProductLikes, patchProductLocal, refreshProducts, addProduct, updateProduct, deleteProduct, addReview]
   )
 
-  return (
-    <CatalogContext.Provider value={value}>
-      {productsPromise && <PromiseSeed promise={productsPromise} onSeed={seedProducts} />}
-      {categoriesPromise && <PromiseSeed promise={categoriesPromise} onSeed={seedCategories} />}
-      {children}
-    </CatalogContext.Provider>
-  )
-}
-
-/**
- * Seeds a streamed server promise into client state once resolved. Renders null
- * and resolves inside an effect so routes never block on database reads.
- */
-function PromiseSeed<T>({
-  promise,
-  onSeed,
-}: {
-  promise: Promise<T>
-  onSeed: (data: T) => void
-}) {
-  useEffect(() => {
-    let active = true
-    promise.then(
-      (rows) => {
-        if (active) onSeed(rows)
-      },
-      () => {
-        // Failed reads stay at initial/fallback state.
-      }
-    )
-    return () => {
-      active = false
-    }
-  }, [promise, onSeed])
-  return null
+  return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>
 }
 
 export function useCatalog() {

@@ -138,7 +138,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div
-        className="pointer-events-none fixed bottom-24 left-1/2 z-[200] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2.5 px-4 sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0"
+        className="pointer-events-none fixed bottom-24 left-1/2 z-[200] flex w-full max-w-[440px] -translate-x-1/2 flex-col gap-3 px-4 sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0"
         onMouseEnter={pauseAll}
         onMouseLeave={resumeAll}
         onFocusCapture={pauseAll}

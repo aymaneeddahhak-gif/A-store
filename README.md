@@ -4,14 +4,14 @@ A production-grade, full-stack e-commerce experience built with **Next.js 15 (Ap
 
 ---
 
-## ✨ Highlights
+## Highlights
 
 - **Server-Driven Commerce**: Prices, promotional discounts, and shipping are strictly calculated on the server via Server Actions. The client decides *what* to buy; the server decides *what it costs*.
 - **Live Catalog & Seller Dashboard**: Product CRUD, inventory tracking, live showcase pinning, and order fulfillment state machine (`Pending` → `Confirmed` → `Processing` → `Shipped` → `Delivered`).
 - **PostgreSQL Realtime Synchronization**: Live updates streamed via Postgres CDC publication (`supabase_realtime`) to update products and store settings without page reloads.
 - **Strict Row-Level Security (RLS)**: Buyers are sandboxed to their own orders, direct client manipulation of order totals/statuses is blocked, and catalog mutations are enforced through authenticated server sessions.
 - **Glassmorphic UI & UX Polish**: Theme engine (dark/light) with anti-flash script, accessible skip navigation, reduced-motion compatibility, and responsive mobile drawers.
-- **Portfolio-Ready Demo Sign-in**: One-click demo roles (Admin & Tester) for instant evaluation without manual account registration.
+- **One-Click Demo Sign-in**: Instant Seller and Client roles for evaluating the storefront, checkout, and seller dashboard without manual account registration.
 
 ---
 
@@ -55,8 +55,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-ADMIN_DEMO_PASSWORD=your-secure-admin-password
-SELLER_EMAILS=tester@a-store.shop
+SELLER_EMAILS=seller@a-store.shop
 ```
 
 ### 3. Initialize Database & Seed Data
@@ -78,8 +77,8 @@ For testing the platform's multi-role capabilities, visit `/login`:
 
 | Role | Email | Capabilities |
 |------|-------|--------------|
-| **Store Admin** | `admin@a-store.shop` | Full catalog management, showcase pinning, global order fulfillment, settings & audit logs. |
-| **Demo Tester** | `tester@a-store.shop` | Seller dashboard exploration, inventory sandboxing, order processing. |
+| **Seller** | `seller@a-store.shop` | Seller dashboard exploration, isolated product sandbox, and order management. |
+| **Client** | `customer@a-store.shop` | Shopping cart, promo codes, checkout, and order tracking. |
 
 ---
 

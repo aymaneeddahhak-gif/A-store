@@ -12,9 +12,10 @@ export function LoginPageClient() {
 
   return (
     <div className="w-full flex items-center justify-center min-h-[calc(100vh-140px)] -mt-2 lg:-mt-6 px-4">
+      <h1 className="sr-only">Sign in to A-Store</h1>
       <div className="w-full max-w-5xl mx-auto flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 lg:gap-12">
-        {/* Left: Animated transparent WebM lion mascot aligned flush with top of login card */}
-        <div className="hidden lg:flex flex-1 items-start justify-center max-w-[480px] self-start">
+        {/* Left: Original HD lion mascot video with white backdrop aligned with top of login card */}
+        <div className="hidden lg:flex flex-1 items-start justify-center max-w-[440px] self-start">
           <LoginShowcase />
         </div>
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import Image from "next/image"
 import { useCart } from "@/contexts/providers/cart-context"
-import { X, Trash2, ArrowRight, ShoppingBag, Minus, Plus, Check } from "lucide-react"
+import { X, Trash2, ArrowRight, ShoppingBag, Minus, Plus, Check, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export function CartDrawer() {
@@ -25,6 +25,14 @@ export function CartDrawer() {
 
     const closeCart = useCallback(() => setCartOpen(false), [setCartOpen])
 
+    const openProductDetails = useCallback(
+        (productId: number) => {
+            closeCart()
+            router.push(`/product/${productId}?edit=1`)
+        },
+        [closeCart, router]
+    )
+
     useEffect(() => {
         if (isCartOpen) router.prefetch("/checkout")
     }, [isCartOpen, router])
@@ -39,32 +47,23 @@ export function CartDrawer() {
         return () => window.removeEventListener("keydown", onKeyDown)
     }, [isCartOpen, closeCart])
 
+    if (!isCartOpen) return null
+
     return (
         <>
             {/* Backdrop */}
-            {isCartOpen && (
-                <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[105] transition-opacity duration-300"
-                    onClick={closeCart}
-                />
-            )}
+            <div
+                className="fixed inset-0 bg-black/55 z-[105] animate-in fade-in duration-200"
+                onClick={closeCart}
+            />
 
             {/* Drawer */}
             <div
                 ref={panelRef}
                 role="dialog"
-                aria-modal={isCartOpen}
+                aria-modal={true}
                 aria-label="Shopping cart"
-                aria-hidden={!isCartOpen}
-                inert={!isCartOpen ? true : undefined}
-                className={`
-          fixed top-0 right-0 h-full w-full max-w-[min(100%,420px)] z-[110]
-          bg-[var(--drawer-bg)] border-l border-[var(--border-color)]
-          shadow-[-20px_0_50px_rgba(0,0,0,0.3)]
-          transform transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
-          flex flex-col backdrop-blur-xl
-          ${isCartOpen ? "translate-x-0" : "translate-x-full"}
-        `}
+                className="fixed top-0 right-0 h-full w-full max-w-[min(100%,420px)] z-[110] bg-[var(--drawer-bg)] border-l border-[var(--border-color)] shadow-[-20px_0_50px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-300"
             >
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--border-color)] flex items-center justify-between">
@@ -151,12 +150,44 @@ export function CartDrawer() {
                                         />
                                     </span>
                                 </label>
-                                <div className="w-20 h-20 rounded-xl bg-[var(--glass-bg)] overflow-hidden relative shrink-0">
-                                    <Image src={item.image} alt={item.name} fill sizes="80px" className="object-cover" />
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => openProductDetails(item.id)}
+                                    aria-label={`View more details for ${item.name}`}
+                                    title="View more / edit selection"
+                                    className="group/thumb w-20 h-20 rounded-xl bg-[var(--glass-bg)] overflow-hidden relative shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--foreground)]"
+                                >
+                                    <Image
+                                        src={item.image}
+                                        alt={item.name}
+                                        fill
+                                        sizes="80px"
+                                        className="object-cover transition-transform duration-200 group-hover/thumb:scale-105"
+                                    />
+                                    <span
+                                        aria-hidden
+                                        className="absolute inset-0 bg-black/55 opacity-0 group-hover/thumb:opacity-100 group-focus-visible/thumb:opacity-100 transition-opacity duration-150 flex flex-col items-center justify-center gap-0.5 text-white px-1"
+                                    >
+                                        <Eye size={14} strokeWidth={2.2} />
+                                        <span className="text-[10px] font-semibold tracking-tight leading-none">
+                                            View more
+                                        </span>
+                                    </span>
+                                </button>
                                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                    <h3 className="font-bold text-[var(--foreground)] leading-tight truncate">{item.name}</h3>
-                                    <p className="text-[var(--silver-medium)] text-sm truncate capitalize">{item.category} · ${item.price.toFixed(2)} each</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => openProductDetails(item.id)}
+                                        className="text-left font-bold text-[var(--foreground)] leading-tight truncate hover:underline cursor-pointer"
+                                    >
+                                        {item.name}
+                                    </button>
+                                    <p className="text-[var(--silver-medium)] text-xs sm:text-sm truncate capitalize">
+                                        {item.category}
+                                        {item.color ? ` · ${item.color}` : ""}
+                                        {item.size ? ` · Size ${item.size}` : ""}
+                                        {` · $${item.price.toFixed(2)}`}
+                                    </p>
                                     <div className="flex items-center justify-between mt-2 gap-2">
                                         <div className="flex items-center rounded-lg border border-[var(--border-color)]">
                                             <button type="button" onClick={() => updateQuantity(item.id, item.quantity - 1)} aria-label={`Decrease ${item.name} quantity`} className="p-1.5 hover:bg-[var(--glass-highlight)] rounded-l-lg"><Minus size={13} /></button>
@@ -164,14 +195,25 @@ export function CartDrawer() {
                                             <button type="button" onClick={() => updateQuantity(item.id, item.quantity + 1)} aria-label={`Increase ${item.name} quantity`} className="p-1.5 hover:bg-[var(--glass-highlight)] rounded-r-lg"><Plus size={13} /></button>
                                         </div>
                                         <span className="text-[var(--electric-light-color)] font-medium">${(item.price * item.quantity).toFixed(2)}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeFromCart(item.id)}
-                                            aria-label={`Remove ${item.name} from cart`}
-                                            className="text-[var(--muted-foreground)] hover:text-[var(--destructive-foreground)] transition-colors"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => openProductDetails(item.id)}
+                                                aria-label={`View or edit ${item.name} selection`}
+                                                title="View / edit selected product"
+                                                className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+                                            >
+                                                <Eye size={16} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeFromCart(item.id)}
+                                                aria-label={`Remove ${item.name} from cart`}
+                                                className="p-1 text-[var(--muted-foreground)] hover:text-[var(--destructive-foreground)] transition-colors cursor-pointer"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

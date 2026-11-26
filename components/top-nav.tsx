@@ -112,7 +112,7 @@ export function TopNav() {
 
           {/* Centered Floating Navigation Capsule */}
           <div className="pointer-events-auto fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-[95] max-w-[calc(100vw-24px)]">
-            <div className="flex items-center gap-1 sm:gap-2 rounded-full bg-white/95 dark:bg-[#15181e]/95 backdrop-blur-md border border-gray-200/80 dark:border-white/10 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.08)] dark:shadow-[0_14px_40px_-6px_rgba(0,0,0,0.55)] px-3 sm:px-4 py-1.5 sm:py-2">
+            <div className="flex items-center gap-1 sm:gap-2 rounded-full bg-white/98 dark:bg-[#15181e]/98 border border-gray-200/80 dark:border-white/10 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.08)] dark:shadow-[0_14px_40px_-6px_rgba(0,0,0,0.55)] px-3 sm:px-4 py-1.5 sm:py-2">
               {/* 1. Home Icon Link */}
               <Link
                 href="/"

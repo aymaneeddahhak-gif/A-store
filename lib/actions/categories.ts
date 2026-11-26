@@ -73,7 +73,7 @@ export async function listCategoriesAction(): Promise<CategoryActionResult<Categ
   try {
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: createResilientFetch({ noStore: true }) },
+      global: { fetch: createResilientFetch() },
     })
 
     const result = await Promise.race([

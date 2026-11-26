@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import type { Product } from "@/lib/types"
 import { getProductMedia } from "@/lib/product-media"
 import { useCart } from "@/contexts/providers/cart-context"
@@ -27,6 +27,31 @@ const SizeGuideModal = dynamic(
  * pickers start on the cart line's saved variant and the primary button
  * updates that line instead of adding a new one.
  */
+function CartEditSync({
+  productId,
+  cart,
+  cartHydrated,
+  onSyncEdit,
+}: {
+  productId: number
+  cart: ReturnType<typeof useCart>["cart"]
+  cartHydrated: boolean
+  onSyncEdit: (editing: boolean, color?: string, size?: string) => void
+}) {
+  const searchParams = useSearchParams()
+  const isEditParam = Boolean(searchParams.get("edit"))
+  const editingItem = isEditParam ? cart.find((item) => item.id === productId) : undefined
+  const appliedRef = useRef(false)
+
+  useEffect(() => {
+    if (appliedRef.current || !cartHydrated || !editingItem) return
+    appliedRef.current = true
+    onSyncEdit(true, editingItem.color, editingItem.size)
+  }, [cartHydrated, editingItem, onSyncEdit])
+
+  return null
+}
+
 export function DetailExperience({
   product,
   categoryLabel,
@@ -34,7 +59,6 @@ export function DetailExperience({
   variantLabel = "Size",
   variantOptions = [],
   showSizes,
-  editItemId,
 }: {
   product: Product
   categoryLabel: string
@@ -42,28 +66,22 @@ export function DetailExperience({
   variantLabel?: string
   variantOptions?: string[]
   showSizes: boolean
-  editItemId?: number
 }) {
   const { cart, cartHydrated, updateCartItem } = useCart()
   const router = useRouter()
-
-  const editingItem = editItemId ? cart.find((item) => item.id === editItemId) : undefined
 
   const defaultOption = variantOptions[0] ?? (showSizes ? "42" : "")
   const [selectedColor, setSelectedColor] = useState(colors[0]?.name ?? "")
   const [selectedSize, setSelectedSize] = useState(defaultOption)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
-  // The cart hydrates from localStorage after mount, so the line's saved
-  // variant is applied once (and only once) it is available.
-  const variantAppliedRef = useRef(false)
-  useEffect(() => {
-    if (variantAppliedRef.current || !cartHydrated || !editingItem) return
-    variantAppliedRef.current = true
-    if (editingItem.color) setSelectedColor(editingItem.color)
-    if (editingItem.size) setSelectedSize(editingItem.size)
-  }, [cartHydrated, editingItem])
+  const handleSyncEdit = useCallback((editing: boolean, color?: string, size?: string) => {
+    setIsEditing(editing)
+    if (color) setSelectedColor(color)
+    if (size) setSelectedSize(size)
+  }, [])
 
   const colorImages = useMemo(
     () => colors.map((c) => c.image).filter((src): src is string => Boolean(src)),
@@ -83,13 +101,21 @@ export function DetailExperience({
   }
 
   const handleUpdateItem = () => {
-    if (!editingItem) return
-    updateCartItem(editingItem.id, { color: selectedColor, size: selectedSize })
+    if (!isEditing) return
+    updateCartItem(product.id, { color: selectedColor, size: selectedSize })
     router.push("/checkout")
   }
 
   return (
     <>
+      <Suspense fallback={null}>
+        <CartEditSync
+          productId={product.id}
+          cart={cart}
+          cartHydrated={cartHydrated}
+          onSyncEdit={handleSyncEdit}
+        />
+      </Suspense>
       {/* Main 2-Column Product Layout */}
       <div className="mt-2 grid grid-cols-1 items-start gap-8 md:grid-cols-2 lg:gap-12">
         <div className="w-full">
@@ -114,7 +140,7 @@ export function DetailExperience({
             selectedSize={selectedSize}
             onSelectSize={setSelectedSize}
             onOpenSizeGuide={() => setSizeGuideOpen(true)}
-            isEditing={Boolean(editingItem)}
+            isEditing={isEditing}
             onUpdateItem={handleUpdateItem}
           />
         </div>

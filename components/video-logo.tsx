@@ -47,9 +47,14 @@ export function VideoLogo({
         loop
         playsInline
         autoPlay
+        controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        onContextMenu={(e) => e.preventDefault()}
         preload="metadata"
         aria-hidden
-        className={`${videoClassName} w-auto aspect-video object-cover transition-transform duration-500 ease-out group-hover:scale-105`}
+        className={`${videoClassName} w-auto aspect-video object-cover transition-transform duration-500 ease-out group-hover:scale-105 pointer-events-none select-none`}
       />
     </Link>
   )

@@ -51,32 +51,19 @@ export function AuthForm({
   onSwitchMode,
 }: AuthFormProps) {
   const [rememberMe, setRememberMe] = useState(true)
-  const primaryDemos = DEMO_ACCOUNTS.filter((a) => a.id !== "demo_admin")
-  const adminDemo = DEMO_ACCOUNTS.find((a) => a.id === "demo_admin")
 
   return (
     <form className="uiverse-login-form" onSubmit={onSubmit}>
-      {/* Portfolio Demo Roles at the TOP of the login card */}
-      <div className="flex flex-col gap-2.5 mb-1">
-        <div className="grid grid-cols-2 gap-3">
-          {primaryDemos.map((account) => (
-            <DemoRoleCard
-              key={account.id}
-              account={account}
-              onSelect={onDemoLogin}
-              disabled={isLoading}
-            />
-          ))}
-        </div>
-        {/* TEMPORARY Admin access card — remove before final production deployment */}
-        {adminDemo && (
+      {/* Role quick sign-in cards at the TOP of the login card */}
+      <div className="grid grid-cols-2 gap-3 mb-1">
+        {DEMO_ACCOUNTS.map((account) => (
           <DemoRoleCard
-            account={adminDemo}
+            key={account.id}
+            account={account}
             onSelect={onDemoLogin}
             disabled={isLoading}
-            compact
           />
-        )}
+        ))}
       </div>
 
       <p className="uiverse-login-text">Or Sign In With Email</p>

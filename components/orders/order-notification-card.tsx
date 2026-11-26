@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Check, X } from 'lucide-react';
+import { orderStatusBadgeClass } from '@/components/orders/order-status';
 
 export type OrderStatus = 'Confirmed' | 'Pending' | 'Cancelled' | 'Shipped' | 'Delivered' | 'In Transit';
 
@@ -20,7 +21,7 @@ export const STATUS_CONFIGS: Record<OrderStatus, StatusConfig> = {
     label: 'Order Confirmed',
     messageText: 'Order Confirmed',
     subText: 'Everything seems great',
-    pillClass: 'bg-emerald-500/12 text-emerald-600 border-emerald-500/35',
+    pillClass: orderStatusBadgeClass('Confirmed'),
     btnClass: 'border-emerald-500/40 text-emerald-600 hover:bg-emerald-600 hover:text-white',
   },
   Pending: {
@@ -28,7 +29,7 @@ export const STATUS_CONFIGS: Record<OrderStatus, StatusConfig> = {
     label: 'Pending',
     messageText: 'Order Pending',
     subText: 'Awaiting merchant approval',
-    pillClass: 'bg-amber-500/12 text-amber-600 border-amber-500/35',
+    pillClass: orderStatusBadgeClass('Pending'),
     btnClass: 'border-amber-500/40 text-amber-600 hover:bg-amber-500 hover:text-black',
   },
   Cancelled: {
@@ -36,7 +37,7 @@ export const STATUS_CONFIGS: Record<OrderStatus, StatusConfig> = {
     label: 'Cancel Order',
     messageText: 'Order Cancelled',
     subText: 'Refund issued to original payment',
-    pillClass: 'bg-rose-500/12 text-rose-600 border-rose-500/35',
+    pillClass: orderStatusBadgeClass('Cancelled'),
     btnClass: 'border-rose-500/40 text-rose-600 hover:bg-rose-600 hover:text-white',
   },
   Shipped: {
@@ -44,7 +45,7 @@ export const STATUS_CONFIGS: Record<OrderStatus, StatusConfig> = {
     label: 'Shipped',
     messageText: 'Package Shipped',
     subText: 'Carrier picked up your order',
-    pillClass: 'bg-blue-500/12 text-blue-600 border-blue-500/35',
+    pillClass: orderStatusBadgeClass('Shipped'),
     btnClass: 'border-blue-500/40 text-blue-600 hover:bg-blue-600 hover:text-white',
   },
   Delivered: {
@@ -52,7 +53,7 @@ export const STATUS_CONFIGS: Record<OrderStatus, StatusConfig> = {
     label: 'Delivered',
     messageText: 'Package Delivered',
     subText: 'Package arrived safely at front door',
-    pillClass: 'bg-zinc-900/10 text-zinc-800 border-zinc-500/35',
+    pillClass: orderStatusBadgeClass('Delivered'),
     btnClass: 'border-zinc-500/40 text-zinc-800 hover:bg-zinc-900 hover:text-white',
   },
   'In Transit': {
@@ -60,7 +61,7 @@ export const STATUS_CONFIGS: Record<OrderStatus, StatusConfig> = {
     label: 'In Transit',
     messageText: 'In Transit',
     subText: 'Moving to nearest delivery hub',
-    pillClass: 'bg-blue-500/12 text-blue-600 border-blue-500/35',
+    pillClass: orderStatusBadgeClass('Shipped'),
     btnClass: 'border-blue-500/40 text-blue-600 hover:bg-blue-600 hover:text-white',
   },
 };

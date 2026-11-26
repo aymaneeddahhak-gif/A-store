@@ -13,15 +13,15 @@ test.describe("A-Store E2E Smoke Tests", () => {
     await expect(skipLink).toBeAttached()
   })
 
-  test("renders the login page with one-click demo accounts", async ({ page }) => {
+  test("renders the login page with one-click role cards", async ({ page }) => {
     await page.goto("/login")
 
-    // Heading exists
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+    // Heading exists for accessibility
+    await expect(page.getByRole("heading", { level: 1 })).toBeAttached()
 
-    // Demo accounts exist for portfolio evaluation
-    await expect(page.getByText(/Continue as Admin/i)).toBeVisible()
-    await expect(page.getByText(/Continue as Tester/i)).toBeVisible()
+    // Seller and Client quick sign-in cards are shown
+    await expect(page.getByRole("button", { name: /Seller/i })).toBeVisible()
+    await expect(page.getByRole("button", { name: /Client/i })).toBeVisible()
   })
 
   test("cart drawer opens and closes smoothly", async ({ page }) => {

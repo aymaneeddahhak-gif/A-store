@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 
-export type AvatarVariant = "demo_seller" | "demo_admin" | "customer" | "default"
+export type AvatarVariant = "demo_seller" | "customer" | "default"
 
 /**
  * Option C: Dual-Tone Rounded Brand Badge SVGs.
@@ -15,7 +15,7 @@ export function VectorAvatar({
   variant?: AvatarVariant
   sizeClass?: string
 }) {
-  if (variant === "demo_seller" || variant === "demo_admin") {
+  if (variant === "demo_seller") {
     return (
       <svg
         viewBox="0 0 40 40"
@@ -60,9 +60,16 @@ export function VectorAvatar({
 
 export function avatarVariantForEmail(email?: string | null): AvatarVariant {
   if (!email) return "default"
-  const lower = email.toLowerCase()
-  if (lower.includes("seller") || lower.includes("admin")) return "demo_seller"
-  if (lower === "customer@a-store.shop" || lower === "tester@a-store.shop") return "customer"
+  const lower = email.trim().toLowerCase()
+  if (
+    lower === "seller@a-store.shop" ||
+    lower === "demo-seller@a-store.shop" ||
+    lower === "admin@a-store.shop" ||
+    lower.endsWith("@demo.a-store.shop")
+  ) {
+    return "demo_seller"
+  }
+  if (lower === "customer@a-store.shop") return "customer"
   return "default"
 }
 

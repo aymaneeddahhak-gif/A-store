@@ -146,7 +146,7 @@ SECURITY DEFINER
 AS $$
   SELECT lower(coalesce(auth.jwt() ->> 'email', '')) IN (
     'admin@a-store.shop',
-    'tester@a-store.shop'
+    'seller@a-store.shop'
   );
 $$;
 

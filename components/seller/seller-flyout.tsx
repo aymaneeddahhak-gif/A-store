@@ -71,22 +71,9 @@ export function SellerFlyout() {
             onTabChange={(tab) => {
               setSellerTab(tab)
               setFlyoutOpen(false)
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("start-delivery-loading", {
-                    detail: {
-                      message: `Opening ${tab}`,
-                    },
-                  })
-                )
+              if (pathname !== "/seller") {
+                router.push("/seller")
               }
-              if (pathname === "/seller") {
-                setTimeout(() => {
-                  window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
-                }, 220)
-                return
-              }
-              router.push("/seller")
             }}
             isDarkMode={isDarkMode}
           />

@@ -12,7 +12,7 @@ import {
   Pencil,
   ArrowRight,
   ShieldCheck,
-  CheckCircle2,
+  Check,
   Loader2,
 } from "lucide-react"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
@@ -260,9 +260,7 @@ export function CheckoutExperience() {
       <div className="pt-0 pb-12 px-4 max-w-5xl mx-auto">
         <div className="w-full max-w-5xl mx-auto bg-white rounded-[26px] md:rounded-[32px] shadow-2xl shadow-neutral-900/10 p-8 md:p-12">
           <div className="text-center py-8 space-y-4 max-w-md mx-auto">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
+            <Check className="w-9 h-9 text-emerald-600 mx-auto" strokeWidth={2.5} aria-hidden />
             <h3 className="text-lg font-bold text-neutral-900">Thank you for your order!</h3>
             <p className="text-xs text-neutral-500 leading-relaxed">
               Order <span className="font-mono">{placedOrder.id}</span> is confirmed. A receipt
@@ -331,19 +329,24 @@ export function CheckoutExperience() {
           </span>
         </nav>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-start">
-          {/* ================= LEFT: MASCOT (larger, zero wasted top space) ================= */}
-          <div className="w-full lg:col-span-7">
-            <div className="relative flex w-full items-center justify-center select-none">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
+          {/* ================= LEFT: MASCOT (borderless white backdrop matching column height) ================= */}
+          <div className="w-full lg:col-span-6 flex flex-col justify-center">
+            <div className="w-full flex-1 min-h-[420px] flex items-center justify-center p-2 sm:p-4 bg-white select-none">
               <video
                 src="/videos/mascot/checkoutcartvideotrsprnt.webm"
                 autoPlay={!reducedMotion}
                 muted
                 loop
                 playsInline
+                controls={false}
+                disablePictureInPicture
+                disableRemotePlayback
+                controlsList="nodownload noplaybackrate noremoteplayback"
+                onContextMenu={(e) => e.preventDefault()}
                 preload="auto"
                 aria-label="Store mascot with shopping cart"
-                className="w-full h-auto max-h-[700px] object-contain"
+                className="w-full h-full max-h-[580px] object-contain pointer-events-none select-none"
               />
             </div>
             <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-widest text-neutral-400">
@@ -352,7 +355,7 @@ export function CheckoutExperience() {
           </div>
 
           {/* ================= RIGHT: MULTI-STEP CHECKOUT ================= */}
-          <div className="w-full lg:col-span-5 flex flex-col rounded-2xl border border-neutral-100 bg-[#fbfaf8] overflow-hidden">
+          <div className="w-full lg:col-span-6 flex flex-col rounded-2xl border border-neutral-100 bg-[#fbfaf8] overflow-hidden">
             {/* Step header */}
             <div className="px-6 sm:px-8 py-5 border-b border-neutral-100 flex items-center justify-between bg-white">
               <div>

@@ -22,7 +22,6 @@ const eslintConfig = [
       "**/.agents/**",
       "**/.claude/**",
       "**/.zcode/**",
-      "**/.freebuff/**",
       "check-*.mjs",
     ],
   },

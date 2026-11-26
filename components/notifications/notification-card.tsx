@@ -112,15 +112,15 @@ export function NotificationCard({
   const style = ACCENTS[accent]
 
   return (
-    <div className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-[#f9f9f9] dark:bg-[var(--card)] shadow-[0_1px_4px_rgba(0,0,0,0.08)] px-3 py-2.5">
-      <div className="flex items-start gap-2.5 w-full">
+    <div className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-[#f9f9f9] dark:bg-[var(--card)] shadow-[0_10px_28px_rgba(0,0,0,0.12)] px-4 py-3.5 sm:px-5 sm:py-4">
+      <div className="flex items-start gap-3 w-full">
         <span className="pt-0.5 shrink-0 flex items-center justify-center">
-          <Icon size={17} strokeWidth={2.2} className={style.iconText} aria-hidden />
+          <Icon size={20} strokeWidth={2.2} className={style.iconText} aria-hidden />
         </span>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 w-full">
-            <span className="text-[13px] font-semibold text-neutral-800 dark:text-[var(--foreground)] truncate">
+            <span className="text-[15px] font-bold text-neutral-900 dark:text-[var(--foreground)] truncate">
               {title}
             </span>
             {onClose && (
@@ -128,40 +128,40 @@ export function NotificationCard({
                 type="button"
                 onClick={onClose}
                 aria-label="Dismiss notification"
-                className="cursor-pointer shrink-0 text-black/30 dark:text-white/40 hover:text-black/70 dark:hover:text-white/80 transition-colors"
+                className="cursor-pointer shrink-0 text-black/35 dark:text-white/40 hover:text-black/75 dark:hover:text-white/80 transition-colors"
               >
-                <X size={15} aria-hidden />
+                <X size={17} aria-hidden />
               </button>
             )}
           </div>
           {message && (
-            <p className="text-xs text-neutral-500 dark:text-[var(--muted-foreground)] mt-0.5 line-clamp-2">
+            <p className="text-[13px] text-neutral-600 dark:text-[var(--muted-foreground)] mt-0.5 line-clamp-2">
               {message}
             </p>
           )}
           {productName && (
-            <p className="text-xs text-neutral-500 dark:text-[var(--muted-foreground)] mt-1 truncate">
+            <p className="text-[13px] text-neutral-500 dark:text-[var(--muted-foreground)] mt-1 truncate">
               {productName}
             </p>
           )}
           {price && (
-            <p className="text-xs font-semibold text-neutral-800 dark:text-[var(--foreground)] mt-0.5">
+            <p className="text-sm font-bold text-neutral-900 dark:text-[var(--foreground)] mt-1">
               {price}
             </p>
           )}
           {footnote && (
-            <p className="text-[10px] text-neutral-400 dark:text-[var(--muted-foreground)] opacity-75 mt-1">
+            <p className="text-[11px] text-neutral-400 dark:text-[var(--muted-foreground)] opacity-80 mt-1">
               {footnote}
             </p>
           )}
           {actions && actions.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex flex-wrap gap-2.5 pt-3">
               {actions.map((action) => (
                 <button
                   key={action.label}
                   type="button"
                   onClick={action.onClick}
-                  className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border uppercase cursor-pointer transition-all duration-200 ${style.btn}`}
+                  className={`text-xs font-bold px-4 py-1.5 rounded-full border uppercase tracking-wide cursor-pointer transition-all duration-200 ${style.btn}`}
                 >
                   {action.label}
                 </button>

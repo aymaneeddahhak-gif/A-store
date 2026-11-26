@@ -51,9 +51,7 @@ export function DetailGallery({
     <div className="flex flex-col w-full">
       {/* Main Big Product Showcase Box */}
       <div
-        className={`relative w-full aspect-[4/3.2] sm:aspect-[4/3] rounded-2xl md:rounded-[22px] bg-[#f2f0eb] dark:bg-white/5 flex items-center justify-center p-6 md:p-8 overflow-hidden group select-none ${
-          current.kind === "image" ? "cursor-zoom-in" : ""
-        }`}
+        className="relative w-full aspect-square rounded-2xl md:rounded-[22px] bg-white dark:bg-white/5 flex items-center justify-center overflow-hidden group select-none cursor-zoom-in"
         onClick={() => {
           if (current.kind === "image") setIsZoomed(!isZoomed)
         }}
@@ -67,11 +65,16 @@ export function DetailGallery({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.28, ease: "easeOut" }}
-              className="w-full h-full object-contain max-h-[560px] drop-shadow-sm pointer-events-none"
+              className="w-full h-full object-cover pointer-events-none select-none"
               autoPlay
               muted
               loop
               playsInline
+              controls={false}
+              disablePictureInPicture
+              disableRemotePlayback
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              onContextMenu={(e) => e.preventDefault()}
               aria-label={`${title} showcase video`}
             />
           ) : (
@@ -89,7 +92,7 @@ export function DetailGallery({
                 fill
                 sizes="(max-width: 768px) 100vw, 50vw"
                 priority
-                className="object-contain drop-shadow-sm pointer-events-none"
+                className="object-cover pointer-events-none"
               />
             </motion.div>
           )}
@@ -114,7 +117,7 @@ export function DetailGallery({
                 key={`${item.kind}-${item.src}`}
                 type="button"
                 onClick={() => select(index)}
-                className={`relative aspect-[4/3] rounded-xl sm:rounded-2xl bg-[#f2f0eb] dark:bg-white/5 p-1.5 sm:p-2 overflow-hidden flex items-center justify-center transition-all cursor-pointer ${
+                className={`relative aspect-square rounded-xl sm:rounded-2xl bg-white dark:bg-white/5 overflow-hidden flex items-center justify-center transition-all cursor-pointer ${
                   isSelected
                     ? "ring-2 ring-neutral-900 dark:ring-white shadow-xs"
                     : "hover:opacity-85 ring-1 ring-black/5"
@@ -128,8 +131,13 @@ export function DetailGallery({
                       src={item.src}
                       muted
                       playsInline
+                      controls={false}
+                      disablePictureInPicture
+                      disableRemotePlayback
+                      controlsList="nodownload noplaybackrate noremoteplayback"
+                      onContextMenu={(e) => e.preventDefault()}
                       preload="metadata"
-                      className="w-full h-full object-contain pointer-events-none"
+                      className="w-full h-full object-cover pointer-events-none select-none"
                       aria-hidden
                     />
                     <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -144,7 +152,7 @@ export function DetailGallery({
                     alt=""
                     fill
                     sizes="120px"
-                    className="object-contain p-1.5 sm:p-2 pointer-events-none"
+                    className="object-cover pointer-events-none"
                   />
                 )}
               </button>
@@ -156,7 +164,7 @@ export function DetailGallery({
             <button
               type="button"
               onClick={() => setShowMoreModal(true)}
-              className="aspect-[4/3] rounded-xl sm:rounded-2xl bg-[#f2f0eb] dark:bg-white/5 hover:bg-[#eae8e1] dark:hover:bg-white/10 flex items-center justify-center p-2 text-neutral-800 dark:text-[var(--foreground)] text-[12px] sm:text-[13px] font-semibold transition-colors cursor-pointer ring-1 ring-black/5"
+              className="aspect-square rounded-xl sm:rounded-2xl bg-[#f2f0eb] dark:bg-white/5 hover:bg-[#eae8e1] dark:hover:bg-white/10 flex items-center justify-center p-2 text-neutral-800 dark:text-[var(--foreground)] text-[12px] sm:text-[13px] font-semibold transition-colors cursor-pointer ring-1 ring-black/5"
               title={`View all ${media.length} angles`}
             >
               <span>+{hiddenCount} more</span>
@@ -199,10 +207,10 @@ export function DetailGallery({
                     select(idx)
                     setShowMoreModal(false)
                   }}
-                  className="bg-[#f2f0eb] rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-black transition-all text-left"
+                  className="bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-black transition-all text-left border border-neutral-100"
                 >
                   {item.kind === "video" ? (
-                    <span className="w-full h-36 flex items-center justify-center">
+                    <span className="w-full aspect-square flex items-center justify-center bg-neutral-100">
                       <span className="w-10 h-10 rounded-full bg-black/70 text-white flex items-center justify-center">
                         <Play className="w-4 h-4 fill-white" aria-hidden />
                       </span>
@@ -214,10 +222,10 @@ export function DetailGallery({
                       width={400}
                       height={400}
                       sizes="300px"
-                      className="w-full h-36 object-contain"
+                      className="w-full aspect-square object-cover"
                     />
                   )}
-                  <span className="text-xs font-medium text-neutral-600 mt-2">
+                  <span className="text-xs font-medium text-neutral-600 py-2">
                     {item.kind === "video" ? "Showcase video" : `Angle 0${idx + 1}`}
                   </span>
                 </button>

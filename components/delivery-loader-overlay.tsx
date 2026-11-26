@@ -37,26 +37,20 @@ export function CartLoader({
 }
 
 /**
- * Global Transition Overlay: Shows the Cart Loader whenever any route or
- * action across the website takes time to load.
- * 
- * Styled with a clean, professional full-screen translucent white shadow/glow
- * backdrop (zero card background or border around the loader itself).
+ * Global Transition & Async Action Overlay: Shows the Cart Loader smoothly on
+ * route transitions (internal links, sidebar/nav clicks, programmatic pushState)
+ * and explicit async DB actions (`start-delivery-loading`), without expensive
+ * backdrop-blur filters that degrade frame rate.
  */
 export function DeliveryLoaderOverlay() {
   const [loading, setLoading] = useState(false)
   const [loaderMessage, setLoaderMessage] = useState("Loading")
   const pathname = usePathname()
-  const delayTimerRef = useRef<number | null>(null)
-  const safetyMsRef = useRef<number>(3500)
+  const safetyMsRef = useRef(4000)
   const loadingRef = useRef(false)
 
-  // Dismiss loader (and cancel any delayed route loader) once the route renders
+  // Dismiss loader cleanly once the target route renders.
   useEffect(() => {
-    if (delayTimerRef.current !== null) {
-      window.clearTimeout(delayTimerRef.current)
-      delayTimerRef.current = null
-    }
     const timer = setTimeout(() => {
       loadingRef.current = false
       setLoading(false)
@@ -64,77 +58,50 @@ export function DeliveryLoaderOverlay() {
     return () => clearTimeout(timer)
   }, [pathname])
 
-  // Global listener for navigation clicks and custom triggers
   useEffect(() => {
-    const clearDelay = () => {
-      if (delayTimerRef.current !== null) {
-        window.clearTimeout(delayTimerRef.current)
-        delayTimerRef.current = null
-      }
-    }
-
-    const scheduleRouteLoading = (message = "Loading") => {
-      // Never shorten an active explicit async/DB loader (e.g., Sign In -> redirect)
+    const startRouteLoading = (message = "Loading") => {
       if (loadingRef.current) return
-      clearDelay()
-      safetyMsRef.current = 3500
-      delayTimerRef.current = window.setTimeout(() => {
-        loadingRef.current = true
-        setLoaderMessage(message)
-        setLoading(true)
-        delayTimerRef.current = null
-      }, 220)
-    }
-
-    const startImmediateLoading = (message = "Loading", safetyMs = 15000) => {
-      clearDelay()
-      safetyMsRef.current = safetyMs
+      safetyMsRef.current = 4000
       loadingRef.current = true
       setLoaderMessage(message)
       setLoading(true)
     }
 
-    const stopAllLoading = () => {
-      clearDelay()
-      loadingRef.current = false
-      setLoading(false)
+    const startExplicitLoading = (message = "Loading") => {
+      safetyMsRef.current = 15000
+      loadingRef.current = true
+      setLoaderMessage(message)
+      setLoading(true)
     }
 
     const handleDocumentClick = (e: MouseEvent) => {
-      // Don't intercept modified clicks (Cmd/Ctrl + click opens new tab)
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
 
       const target = (e.target as HTMLElement)?.closest("a, button")
       if (!target) return
 
-      // 1. Check for link navigation (wait 220ms so instant navigations never flash an overlay)
       const href = target.getAttribute("href")
       if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !href.startsWith("mailto:")) {
         try {
           const parsed = new URL(href, window.location.origin)
-          // Internal link to a different path or query
           if (
             parsed.origin === window.location.origin &&
             (parsed.pathname !== window.location.pathname || parsed.search !== window.location.search)
           ) {
-            scheduleRouteLoading("Loading")
+            startRouteLoading("Loading")
           }
         } catch {}
       }
 
-      // 2. Check for button triggers that initiate async operations
       if (
         target.hasAttribute("data-loading-trigger") ||
         target.getAttribute("data-action") === "checkout"
       ) {
-        startImmediateLoading("Loading", 15000)
+        startExplicitLoading("Loading")
       }
     }
 
-    // 3. Intercept history.pushState so slow programmatic navigations show loader after 220ms.
-    // Next.js 15 invokes history.pushState inside React's useInsertionEffect, where
-    // scheduling synchronous state updates crashes React ("useInsertionEffect must not
-    // schedule updates"). Always defer via queueMicrotask and never block originalPush.
+    // Defer state updates out of Next.js 15's useInsertionEffect call stack.
     const originalPush = history.pushState.bind(history)
     history.pushState = (...args: Parameters<typeof originalPush>) => {
       const urlArg = args[2] ? String(args[2]) : ""
@@ -145,9 +112,7 @@ export function DeliveryLoaderOverlay() {
             parsed.pathname !== window.location.pathname ||
             parsed.search !== window.location.search
           ) {
-            queueMicrotask(() => {
-              scheduleRouteLoading("Loading")
-            })
+            queueMicrotask(() => startRouteLoading("Loading"))
           }
         } catch {}
       }
@@ -155,19 +120,18 @@ export function DeliveryLoaderOverlay() {
     }
 
     const onPopState = () => {
-      queueMicrotask(() => {
-        scheduleRouteLoading("Loading")
-      })
+      queueMicrotask(() => startRouteLoading("Loading"))
     }
 
     const handleCustomStart = (e: Event) => {
       const customEvent = e as CustomEvent<{ message?: string; label?: string }>
       const text = customEvent.detail?.message || customEvent.detail?.label || "Loading"
-      startImmediateLoading(text, 15000)
+      startExplicitLoading(text)
     }
 
     const handleCustomStop = () => {
-      stopAllLoading()
+      loadingRef.current = false
+      setLoading(false)
     }
 
     document.addEventListener("click", handleDocumentClick, true)
@@ -176,7 +140,6 @@ export function DeliveryLoaderOverlay() {
     window.addEventListener("stop-delivery-loading", handleCustomStop)
 
     return () => {
-      clearDelay()
       history.pushState = originalPush
       document.removeEventListener("click", handleDocumentClick, true)
       window.removeEventListener("popstate", onPopState)
@@ -185,7 +148,7 @@ export function DeliveryLoaderOverlay() {
     }
   }, [])
 
-  // Auto-dismiss safety timeout so user is never stuck (3.5s routes / 15s explicit DB auth)
+  // Safety timeout so users are never stuck if an async navigation or DB call drops.
   useEffect(() => {
     if (!loading) return
     const timer = setTimeout(() => {
@@ -201,7 +164,7 @@ export function DeliveryLoaderOverlay() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-0 z-[220] flex items-center justify-center p-4 transition-opacity duration-300 pointer-events-auto bg-white/75 dark:bg-black/65 backdrop-blur-md shadow-[inset_0_0_120px_rgba(255,255,255,0.9)] dark:shadow-[inset_0_0_120px_rgba(255,255,255,0.06)] animate-in fade-in"
+      className="fixed inset-0 z-[220] flex items-center justify-center p-4 pointer-events-auto bg-[#faf7f2]/88 dark:bg-[#0b0d11]/88 animate-in fade-in duration-150"
     >
       <CartLoader message={loaderMessage} />
     </div>

@@ -55,8 +55,25 @@ export function AddProductView({
   const [name, setName] = useState(initial?.name ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
   const [selectedSizes, setSelectedSizes] = useState<string[]>(initial?.sizes ?? ["M", "L"])
-  const [availableSizes, setAvailableSizes] = useState<string[]>(["XS", "S", "M", "L", "XL", "XXL"])
-  const [availableColors, setAvailableColors] = useState<ColorOption[]>(DEFAULT_COLORS)
+  const [availableSizes, setAvailableSizes] = useState<string[]>(() => {
+    const merged = [...["XS", "S", "M", "L", "XL", "XXL"]]
+    for (const s of initial?.sizes ?? []) {
+      if (!merged.includes(s)) merged.push(s)
+    }
+    return merged
+  })
+  const [availableColors, setAvailableColors] = useState<ColorOption[]>(() => {
+    const byName = new Map<string, ColorOption>()
+    for (const c of initial?.colorOptions ?? []) {
+      byName.set(c.name.toLowerCase(), c)
+    }
+    for (const d of DEFAULT_COLORS) {
+      if (!byName.has(d.name.toLowerCase())) {
+        byName.set(d.name.toLowerCase(), d)
+      }
+    }
+    return Array.from(byName.values())
+  })
   const [selectedColors, setSelectedColors] = useState<string[]>(initial?.colors ?? [])
   const [gender, setGender] = useState<"Men" | "Woman" | "Unisex">(initial?.gender ?? "Unisex")
   const [sku, setSku] = useState(initial?.sku ?? "")
@@ -76,6 +93,11 @@ export function AddProductView({
     setSelectedSizes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
   const toggleColor = (c: string) =>
     setSelectedColors((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  const updateColorImage = (colorName: string, image: string | undefined) => {
+    setAvailableColors((prev) =>
+      prev.map((col) => (col.name.toLowerCase() === colorName.toLowerCase() ? { ...col, image } : col))
+    )
+  }
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -125,6 +147,24 @@ export function AddProductView({
           finalVideo = video
         }
       }
+      // Upload any new variant color photos stored as data: URLs first.
+      const resolvedColors: ColorOption[] = []
+      for (let i = 0; i < availableColors.length; i++) {
+        const col = availableColors[i]
+        if (selectedColors.includes(col.name) && col.image?.startsWith("data:")) {
+          const file = dataUrlToFile(col.image, `color-${Date.now()}-${i}.png`)
+          if (file) {
+            const fd = new FormData()
+            fd.append("file", file)
+            const res = await uploadMediaAction(fd)
+            if (res.ok) {
+              resolvedColors.push({ ...col, image: res.data.url })
+              continue
+            }
+          }
+        }
+        resolvedColors.push(col)
+      }
       const payload = toProductPayload({
         name,
         basePrice,
@@ -135,7 +175,7 @@ export function AddProductView({
         images: finalImages,
         selectedSizes,
         selectedColors,
-        availableColors,
+        availableColors: resolvedColors,
       })
       if (finalVideo) payload.video = finalVideo
       const ok = await onSaved(payload, initial?.id ?? null)
@@ -198,6 +238,7 @@ export function AddProductView({
             availableColors={availableColors}
             onToggleColor={toggleColor}
             onAddCustomColor={(c) => setAvailableColors((p) => [...p, c])}
+            onUpdateColorImage={updateColorImage}
             gender={gender}
             onGenderChange={setGender}
             sku={sku}

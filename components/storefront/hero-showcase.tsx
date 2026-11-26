@@ -9,6 +9,7 @@ import { useCatalog } from "@/contexts/providers/catalog-context"
 import { toHeroItem } from "@/components/storefront/product-adapter"
 import { CardMedia } from "@/components/product/card-media"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
+import type { Product } from "@/lib/types"
 import type { HeroProductItem } from "@/lib/storefront/types"
 
 /** How long each product holds center focus before switching to the next. */
@@ -29,10 +30,15 @@ interface VisibleHeroSlot {
  * - Center product is enlarged and autoplays its showcase video on arrival;
  *   flanking blurred neighbors glide into focus when clicked, dragged, or auto-switched.
  */
-export const HeroShowcase: React.FC = () => {
+export const HeroShowcase: React.FC<{ initialProducts?: Product[] }> = ({
+  initialProducts = [],
+}) => {
   const router = useRouter()
-  const { products } = useCatalog()
+  const { products: catalogProducts } = useCatalog()
   const reducedMotion = useReducedMotion()
+  const sectionRef = useRef<HTMLElement>(null)
+
+  const products = catalogProducts.length > 0 ? catalogProducts : initialProducts
 
   const items = useMemo(() => {
     const featured = products.filter((p) => p.featured)
@@ -43,12 +49,26 @@ export const HeroShowcase: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [direction, setDirection] = useState<1 | -1>(1)
   const [paused, setPaused] = useState(false)
-  const [preloadReady, setPreloadReady] = useState(false)
+  const [inView, setInView] = useState(true)
   const draggedRef = useRef(false)
+
+  // Pause hero video decoding & 3.5s slide timer when scrolled out of view.
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el || typeof IntersectionObserver === "undefined") return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry) setInView(entry.isIntersecting)
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const safeIndex = total > 0 ? currentIndex % total : 0
   const current = items[safeIndex]
-  const nextItem = total > 1 ? items[(safeIndex + 1) % total] : undefined
 
   const goPrev = useCallback(() => {
     if (total <= 1) return
@@ -62,22 +82,16 @@ export const HeroShowcase: React.FC = () => {
     setCurrentIndex((prev) => (prev + 1) % total)
   }, [total])
 
-  // Delay background preloading of the next slide's video so initial LCP stays fast
+  // Auto-advance (pauses while hovered, scrolled out of view, hidden, or reduced-motion)
   useEffect(() => {
-    const timer = window.setTimeout(() => setPreloadReady(true), 1500)
-    return () => window.clearTimeout(timer)
-  }, [])
-
-  // Auto-advance (pauses while hovered, hidden, or reduced-motion)
-  useEffect(() => {
-    if (total <= 1 || paused || reducedMotion) return
+    if (total <= 1 || paused || !inView || reducedMotion) return
     const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return
       setDirection(1)
       setCurrentIndex((prev) => (prev + 1) % total)
     }, CENTER_HOLD_MS)
     return () => window.clearInterval(timer)
-  }, [total, paused, reducedMotion])
+  }, [total, paused, inView, reducedMotion])
 
   // Keyboard arrow navigation when on storefront
   useEffect(() => {
@@ -90,15 +104,6 @@ export const HeroShowcase: React.FC = () => {
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [goPrev, goNext])
-
-  // Prefetch center & adjacent detail routes for instant click-through
-  useEffect(() => {
-    if (!current) return
-    router.prefetch(`/product/${current.id}`)
-    if (total > 1 && nextItem) {
-      router.prefetch(`/product/${nextItem.id}`)
-    }
-  }, [current, nextItem, router, total])
 
   const visibleSlots: VisibleHeroSlot[] = useMemo(() => {
     if (total === 0 || !current) return []
@@ -131,19 +136,13 @@ export const HeroShowcase: React.FC = () => {
 
   return (
     <section
+      ref={sectionRef}
       id="hero-showcase-section"
       aria-label="Featured products showcase"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       className="h-[calc(100svh-96px)] sm:h-[calc(100svh-120px)] lg:h-[calc(100svh-136px)] min-h-[440px] flex flex-col items-center justify-center px-4 sm:px-8 pb-2 relative w-full overflow-x-clip select-none"
     >
-      {/* Off-screen preloader warms the next slide's clip metadata before it reaches center */}
-      {preloadReady && !reducedMotion && nextItem?.video && (
-        <div aria-hidden className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
-          <video key={nextItem.video} src={nextItem.video} muted playsInline preload="metadata" tabIndex={-1} />
-        </div>
-      )}
-
       {/* TOP-RIGHT VERTICAL SWITCH BUTTONS (compact close stack like old filter arrows) */}
       <div className="absolute top-2 right-4 sm:right-8 z-30 flex flex-col items-center gap-1">
         <button
@@ -203,23 +202,20 @@ export const HeroShowcase: React.FC = () => {
                 key={key}
                 custom={direction}
                 initial={{
-                  x: direction > 0 ? "180%" : "-180%",
-                  scale: 0.48,
+                  x: direction > 0 ? "160%" : "-160%",
+                  scale: 0.55,
                   opacity: 0,
-                  filter: "blur(14px)",
                 }}
                 animate={{
                   x: xTarget,
                   scale: isCenter ? 1 : 0.66,
-                  opacity: isCenter ? 1 : 0.6,
-                  filter: isCenter ? "blur(0px)" : "blur(8px)",
+                  opacity: isCenter ? 1 : 0.52,
                   zIndex: isCenter ? 20 : 10,
                 }}
                 exit={{
-                  x: direction > 0 ? "-180%" : "180%",
-                  scale: 0.48,
+                  x: direction > 0 ? "-160%" : "160%",
+                  scale: 0.55,
                   opacity: 0,
-                  filter: "blur(14px)",
                   zIndex: 0,
                 }}
                 transition={
@@ -227,9 +223,9 @@ export const HeroShowcase: React.FC = () => {
                     ? { duration: 0.15 }
                     : {
                         type: "spring",
-                        stiffness: 220,
-                        damping: 26,
-                        mass: 0.9,
+                        stiffness: 240,
+                        damping: 28,
+                        mass: 0.85,
                       }
                 }
                 onClick={() => {
@@ -237,10 +233,10 @@ export const HeroShowcase: React.FC = () => {
                   else if (offset === 1) goNext()
                   else openProduct(item)
                 }}
-                className={`absolute flex flex-col items-center justify-center cursor-pointer ${
+                className={`absolute flex flex-col items-center justify-center cursor-pointer will-change-transform ${
                   isCenter
                     ? "w-[min(94vw,520px)] sm:w-[min(78vw,680px)] lg:w-[min(64vw,760px)]"
-                    : "hidden sm:flex w-[260px] sm:w-[340px] lg:w-[430px]"
+                    : "hidden sm:flex w-[260px] sm:w-[340px] lg:w-[430px] blur-[4px]"
                 }`}
                 aria-label={
                   isCenter
@@ -274,7 +270,7 @@ export const HeroShowcase: React.FC = () => {
                         image={item.mainImage}
                         video={item.video}
                         alt={item.name}
-                        active
+                        active={inView}
                         priority
                         videoOnly
                         eagerVideo

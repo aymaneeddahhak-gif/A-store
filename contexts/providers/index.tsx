@@ -11,7 +11,6 @@ import { LikesProvider } from "@/contexts/providers/likes-context"
 import { CatalogProvider } from "@/contexts/providers/catalog-context"
 import { OrdersProvider } from "@/contexts/providers/orders-context"
 import { SellerNavProvider } from "@/contexts/providers/seller-nav-context"
-import type { Product } from "@/lib/types"
 
 /**
  * Providers — single composition root. Order matters (inner providers
@@ -31,16 +30,7 @@ import type { Product } from "@/lib/types"
  * search box no longer re-renders the cart drawer or auth tree.
  */
 
-export function Providers({
-  children,
-  initialProductsPromise,
-  initialCategoriesPromise,
-}: {
-  children: ReactNode
-  /** Streaming catalog read — the layout starts it but does not await it. */
-  initialProductsPromise?: Promise<Product[]>
-  initialCategoriesPromise?: Promise<{ id: string; label: string }[]>
-}) {
+export function Providers({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
       <ThemeProvider>
@@ -48,10 +38,7 @@ export function Providers({
           <NotificationsProvider>
             <CartProvider>
               <QuickViewProvider>
-                <CatalogProvider
-                  productsPromise={initialProductsPromise}
-                  categoriesPromise={initialCategoriesPromise}
-                >
+                <CatalogProvider>
                   <LikesProvider>
                     <OrdersProvider>
                       <SellerNavProvider>{children}</SellerNavProvider>

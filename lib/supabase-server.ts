@@ -14,12 +14,14 @@ export interface DemoCookiePayload {
   exp: number
 }
 
-function getDemoSigningSecret(): string {
-  return (
+function getDemoSigningSecret(): string | null {
+  const secret =
+    process.env.DEMO_SESSION_SECRET ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.ADMIN_DEMO_PASSWORD ||
-    "astore-dev-demo-secret"
-  )
+    process.env.ADMIN_DEMO_PASSWORD
+  if (secret) return secret
+  if (process.env.NODE_ENV === "production") return null
+  return "astore-dev-demo-secret"
 }
 
 function toSyntheticUser(payload: { id?: string; email: string; full_name?: string }): User {
@@ -39,6 +41,10 @@ export function signDemoCookiePayload(payload: {
   email: string
   full_name: string
 }): string {
+  const secret = getDemoSigningSecret()
+  if (!secret) {
+    throw new Error("Demo session signing secret is not configured.")
+  }
   const fullPayload: DemoCookiePayload = {
     id: payload.id,
     email: payload.email.toLowerCase(),
@@ -46,12 +52,14 @@ export function signDemoCookiePayload(payload: {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   }
   const encoded = Buffer.from(JSON.stringify(fullPayload), "utf8").toString("base64url")
-  const sig = createHmac("sha256", getDemoSigningSecret()).update(encoded).digest("base64url")
+  const sig = createHmac("sha256", secret).update(encoded).digest("base64url")
   return `${encoded}.${sig}`
 }
 
 export function verifyDemoCookiePayload(raw: string | undefined): User | null {
   if (!raw) return null
+  const secret = getDemoSigningSecret()
+  if (!secret) return null
   const dot = raw.indexOf(".")
   if (dot <= 0) return null
   const encoded = raw.slice(0, dot)
@@ -59,7 +67,7 @@ export function verifyDemoCookiePayload(raw: string | undefined): User | null {
   if (!encoded || !sig) return null
 
   try {
-    const expected = createHmac("sha256", getDemoSigningSecret())
+    const expected = createHmac("sha256", secret)
       .update(encoded)
       .digest("base64url")
     const a = Buffer.from(sig, "utf8")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import {
   LayoutDashboard,
   Smartphone,
@@ -28,42 +28,27 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   food: <Coffee size={19} />,
 }
 
-function triggerLoader(message: string) {
-  if (typeof window === "undefined") return
-  window.dispatchEvent(
-    new CustomEvent("start-delivery-loading", {
-      detail: { message },
-    })
-  )
-}
-
-function stopLoader() {
-  if (typeof window === "undefined") return
-  window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
-}
-
 export function Sidebar() {
   const { selectedCategory, setCategory, categories } = useCatalog()
   const { user } = useAuth()
   const { flyoutOpen, setFlyoutOpen, openFlyout, scheduleCloseFlyout } = useSellerNav()
   const router = useRouter()
   const pathname = usePathname()
-  const categoryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Close the flyout when switching routes.
   useEffect(() => {
     setFlyoutOpen(false)
   }, [pathname, setFlyoutOpen])
 
+  // Warm the client Router Cache for the primary rail destinations so clicks open immediately.
   useEffect(() => {
-    return () => {
-      if (categoryTimerRef.current) clearTimeout(categoryTimerRef.current)
-    }
-  }, [])
+    router.prefetch("/login")
+    router.prefetch("/seller")
+    if (user) router.prefetch("/profile")
+  }, [router, user])
 
-  const handleCategoryClick = (id: string, label: string) => {
+  const handleCategoryClick = (id: string) => {
     setFlyoutOpen(false)
-    triggerLoader(id === "all" ? "Loading All Products" : `Loading ${label}`)
     setCategory(id)
 
     if (pathname !== "/") {
@@ -71,33 +56,9 @@ export function Sidebar() {
       return
     }
 
-    if (categoryTimerRef.current) clearTimeout(categoryTimerRef.current)
-    categoryTimerRef.current = setTimeout(() => {
-      const catalogSection = document.getElementById("catalog")
-      if (catalogSection) {
-        catalogSection.scrollIntoView({ behavior: "smooth", block: "start" })
-      }
-      stopLoader()
-      categoryTimerRef.current = null
-    }, 320)
-  }
-
-  const handleSellerClick = () => {
-    setFlyoutOpen(false)
-    if (pathname === "/seller") {
-      triggerLoader("Loading Seller Console")
-      setTimeout(stopLoader, 240)
-      return
-    }
-    triggerLoader("Opening Seller Console")
-    router.push("/seller")
-  }
-
-  const handleAccountLinkClick = (targetPath: string, message: string) => {
-    setFlyoutOpen(false)
-    triggerLoader(message)
-    if (pathname === targetPath) {
-      setTimeout(stopLoader, 240)
+    const catalogSection = document.getElementById("storefront-catalog-start")
+    if (catalogSection) {
+      catalogSection.scrollIntoView({ behavior: "smooth", block: "start" })
     }
   }
 
@@ -105,7 +66,7 @@ export function Sidebar() {
     <div className="relative pl-2">
       <aside
         aria-label="Store categories and navigation"
-        className="floating-sidebar flex flex-col items-center py-3 px-2 gap-1.5 rounded-full bg-white/95 dark:bg-[#15181e]/95 backdrop-blur-md border border-gray-200/80 dark:border-white/10 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.08)] dark:shadow-[0_14px_40px_-6px_rgba(0,0,0,0.55)] w-[60px]"
+        className="floating-sidebar flex flex-col items-center py-3 px-2 gap-1.5 rounded-full bg-white/98 dark:bg-[#15181e]/98 border border-gray-200/80 dark:border-white/10 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.08)] dark:shadow-[0_14px_40px_-6px_rgba(0,0,0,0.55)] w-[60px]"
       >
         <div className="flex flex-col items-center gap-1.5 w-full">
           {categories.map(({ id, label }) => {
@@ -116,7 +77,7 @@ export function Sidebar() {
                 icon={CATEGORY_ICONS[id] ?? <Tag size={19} />}
                 label={displayLabel}
                 active={pathname === "/" && selectedCategory === id}
-                onClick={() => handleCategoryClick(id, displayLabel)}
+                onClick={() => handleCategoryClick(id)}
               />
             )
           })}
@@ -124,11 +85,12 @@ export function Sidebar() {
           <div className="h-px w-7 bg-[var(--border-color)] my-1 opacity-70" />
 
           <SidebarRow
+            href="/seller"
             icon={<Store size={19} />}
             label="Seller Dashboard"
             active={pathname === "/seller" || flyoutOpen}
             dataAttr="seller-trigger"
-            onClick={handleSellerClick}
+            onClick={() => setFlyoutOpen(false)}
             onMouseEnter={openFlyout}
             onMouseLeave={scheduleCloseFlyout}
           />
@@ -139,7 +101,7 @@ export function Sidebar() {
               icon={<User size={19} />}
               label="My Profile"
               active={pathname === "/profile"}
-              onClick={() => handleAccountLinkClick("/profile", "Loading Profile")}
+              onClick={() => setFlyoutOpen(false)}
             />
           ) : (
             <SidebarRow
@@ -201,6 +163,7 @@ function SidebarRow({
         onClick={onClick}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
+        data-seller-trigger={dataAttr === "seller-trigger" ? "true" : undefined}
         className={className}
         aria-current={active ? "page" : undefined}
       >

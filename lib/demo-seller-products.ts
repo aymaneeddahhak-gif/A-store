@@ -75,8 +75,7 @@ export function isDemoSellerUser(email?: string | null): boolean {
   return (
     lower === "seller@a-store.shop" ||
     lower === "demo-seller@a-store.shop" ||
-    lower === "demo-admin@a-store.shop" ||
-    lower.includes("seller")
+    lower.endsWith("@demo.a-store.shop")
   )
 }
 

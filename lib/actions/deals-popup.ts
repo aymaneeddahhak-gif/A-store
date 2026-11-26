@@ -66,7 +66,7 @@ function createAnonDealsClient() {
   if (!url || !anonKey) return null
   return createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: createResilientFetch({ noStore: true }) },
+    global: { fetch: createResilientFetch() },
   })
 }
 

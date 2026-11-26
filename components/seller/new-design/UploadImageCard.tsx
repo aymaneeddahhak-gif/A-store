@@ -79,12 +79,24 @@ export const UploadImageCard: React.FC<UploadImageCardProps> = ({
         </button>
       ) : (
         <>
-          <div className={`w-full rounded-2xl p-4 sm:p-6 mb-4 flex items-center justify-center relative overflow-hidden ${isDarkMode ? 'bg-[#272a2e]' : 'bg-[#F4F5F7]'}`}>
+          <div className={`w-full aspect-square rounded-2xl mb-4 flex items-center justify-center relative overflow-hidden ${isDarkMode ? 'bg-[#272a2e]' : 'bg-[#F4F5F7]'}`}>
             {activeSrc ? (
               isVideoSrc(activeSrc) ? (
-                <video src={activeSrc} className="w-full max-h-72 object-contain" muted loop autoPlay playsInline />
+                <video
+                  src={activeSrc}
+                  className="w-full h-full object-cover pointer-events-none select-none"
+                  muted
+                  loop
+                  autoPlay
+                  playsInline
+                  controls={false}
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  controlsList="nodownload noplaybackrate noremoteplayback"
+                  onContextMenu={(e) => e.preventDefault()}
+                />
               ) : (
-                <Image src={activeSrc} alt="Product Showcase" width={300} height={300} unoptimized className="w-full max-h-72 object-contain" />
+                <Image src={activeSrc} alt="Product Showcase" width={480} height={480} unoptimized className="w-full h-full object-cover" />
               )
             ) : (
               <p className="text-xs text-gray-400">No image yet.</p>
@@ -92,11 +104,11 @@ export const UploadImageCard: React.FC<UploadImageCardProps> = ({
           </div>
           <div className="grid grid-cols-4 gap-2.5">
             {images.map((imgUrl, idx) => (
-              <button key={`${idx}-${imgUrl.slice(0, 24)}`} type="button" onClick={() => onSelectImage(idx)} className={`aspect-square rounded-xl p-1.5 flex items-center justify-center overflow-hidden cursor-pointer ${isDarkMode ? 'bg-[#272a2e]' : 'bg-[#F4F5F7]'} ${activeImageIndex === idx ? 'ring-2 ring-[#98e4af]' : 'hover:opacity-90'}`}>
+              <button key={`${idx}-${imgUrl.slice(0, 24)}`} type="button" onClick={() => onSelectImage(idx)} className={`aspect-square rounded-xl flex items-center justify-center overflow-hidden cursor-pointer ${isDarkMode ? 'bg-[#272a2e]' : 'bg-[#F4F5F7]'} ${activeImageIndex === idx ? 'ring-2 ring-[#98e4af]' : 'hover:opacity-90'}`}>
                 {isVideoSrc(imgUrl) ? (
                   <span className="w-full h-full flex items-center justify-center text-gray-400"><Play className="w-5 h-5" /></span>
                 ) : (
-                  <Image src={imgUrl} alt={`Angle ${idx + 1}`} width={96} height={96} unoptimized className="w-full h-full object-contain rounded-lg" />
+                  <Image src={imgUrl} alt={`Angle ${idx + 1}`} width={96} height={96} unoptimized className="w-full h-full object-cover" />
                 )}
               </button>
             ))}
@@ -115,7 +127,19 @@ export const UploadImageCard: React.FC<UploadImageCardProps> = ({
           </p>
           {video ? (
             <div className={`relative rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#272a2e]' : 'bg-[#F4F5F7]'}`}>
-              <video src={video} className="w-full max-h-56 object-contain" muted loop autoPlay playsInline />
+              <video
+                src={video}
+                className="w-full max-h-56 object-contain pointer-events-none select-none"
+                muted
+                loop
+                autoPlay
+                playsInline
+                controls={false}
+                disablePictureInPicture
+                disableRemotePlayback
+                controlsList="nodownload noplaybackrate noremoteplayback"
+                onContextMenu={(e) => e.preventDefault()}
+              />
               {onRemoveVideo && (
                 <button
                   type="button"

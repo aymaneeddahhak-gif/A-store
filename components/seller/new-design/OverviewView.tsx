@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Package,
 } from 'lucide-react';
+import { orderStatusBadgeClass } from '@/components/orders/order-status';
 
 export interface OverviewKpi {
   id: string;
@@ -386,7 +387,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <p className={`font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                       {ord.amount}
                     </p>
-                    <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-[#98e4af]/20 text-[#1e2022] dark:text-[#98e4af]">
+                    <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-[4px] ${orderStatusBadgeClass(ord.status)}`}>
                       {ord.status}
                     </span>
                   </div>
