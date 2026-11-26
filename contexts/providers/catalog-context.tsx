@@ -19,7 +19,6 @@ import {
   updateProductAction,
 } from "@/lib/actions/products"
 import { supabase as browserSupabase } from "@/lib/supabase"
-import { isSupabaseOffline } from "@/lib/supabase-circuit"
 import { addReviewAction } from "@/lib/actions/reviews"
 import { listCategoriesAction, createCategoryAction } from "@/lib/actions/categories"
 import { CATEGORIES as DEFAULT_CATEGORIES, mergeCategories } from "@/lib/categories"
@@ -128,11 +127,15 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     if (res.ok) setProducts(res.data)
   }, [])
 
-  // Live catalog. Postgres changes stream in once the tables are added to the
-  // realtime publication (see sql/catalog-realtime.sql); until then this is a
-  // harmless open subscription and every mutation refreshes locally anyway.
+  // Ensure pages landed on directly (such as /profile or /checkout) hydrate
+  // live products from Supabase when HomePage hasn't seeded the context yet.
   useEffect(() => {
-    if (skipSupabaseBackground || isSupabaseOffline()) return
+    if (skipSupabaseBackground || products.length > 0) return
+    void refreshProducts()
+  }, [skipSupabaseBackground, products.length, refreshProducts])
+
+  useEffect(() => {
+    if (skipSupabaseBackground) return
     const channel = browserSupabase
       .channel("catalog-live")
       .on(

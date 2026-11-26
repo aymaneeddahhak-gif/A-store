@@ -3,18 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { resetSupabaseCircuit } from "@/lib/supabase-circuit"
 import { useAuth } from "@/contexts/providers/auth-context"
 import { DEMO_ACCOUNTS, type DemoAccountId } from "@/lib/demo-accounts"
 import { demoSessionLoginAction } from "@/lib/actions/demo-login"
 import { isSellerEmail } from "@/lib/seller"
 import type { AuthFeedback, AuthMode } from "@/components/login/types"
-
-function isNetworkOrOfflineError(msg: string): boolean {
-  return /fetch failed|network|circuit open|paused or unreachable|supabase_offline|supabase auth offline|supabase auth unavailable|demo session|unreachable|timed? ?out|failed to fetch|enotfound|offline demo/i.test(
-    msg
-  )
-}
 
 function resolveNextPath(): string {
   if (typeof window === "undefined") return "/"
@@ -38,8 +31,6 @@ export function useAuthFlow() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
 
-  // Only auto-redirect already-signed-in visitors who land on /login directly;
-  // allow signed-in non-sellers to stay on /login when switching to a Seller account.
   useEffect(() => {
     if (!authLoading && user && !redirectingRef.current) {
       const params =
@@ -61,9 +52,8 @@ export function useAuthFlow() {
   }, [])
 
   const signInWithPassword = useCallback(
-    async (signInEmail: string, signInPassword: string, fallbackName?: string) => {
+    async (signInEmail: string, signInPassword: string) => {
       const target = resolveNextPath()
-      resetSupabaseCircuit()
       try {
         const { error } = await supabase.auth.signInWithPassword({
           email: signInEmail,
@@ -72,19 +62,6 @@ export function useAuthFlow() {
 
         if (!error) {
           redirectingRef.current = true
-          router.push(target)
-          router.refresh()
-          return
-        }
-
-        if (isNetworkOrOfflineError(error.message)) {
-          const cleanEmail = signInEmail.trim().toLowerCase()
-          redirectingRef.current = true
-          signInDemo({
-            id: cleanEmail.includes("admin") ? "demo-admin-role-id" : `demo-${cleanEmail.split("@")[0]}`,
-            email: cleanEmail,
-            fullName: fallbackName || cleanEmail.split("@")[0] || "Demo User",
-          })
           router.push(target)
           router.refresh()
           return
@@ -108,23 +85,11 @@ export function useAuthFlow() {
           setFeedback({ type: "error", message: error.message })
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Network error"
-        if (isNetworkOrOfflineError(msg)) {
-          const cleanEmail = signInEmail.trim().toLowerCase()
-          redirectingRef.current = true
-          signInDemo({
-            id: cleanEmail.includes("admin") ? "demo-admin-role-id" : `demo-${cleanEmail.split("@")[0]}`,
-            email: cleanEmail,
-            fullName: fallbackName || cleanEmail.split("@")[0] || "Demo User",
-          })
-          router.push(target)
-          router.refresh()
-          return
-        }
+        const msg = err instanceof Error ? err.message : "Could not reach Supabase Auth."
         setFeedback({ type: "error", message: msg })
       }
     },
-    [router, switchMode, signInDemo]
+    [router, switchMode]
   )
 
   const handleSignIn = useCallback(async () => {
@@ -137,7 +102,6 @@ export function useAuthFlow() {
       return
     }
     const target = resolveNextPath()
-    resetSupabaseCircuit()
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -147,18 +111,6 @@ export function useAuthFlow() {
       })
 
       if (error) {
-        if (isNetworkOrOfflineError(error.message)) {
-          const cleanEmail = email.trim().toLowerCase()
-          redirectingRef.current = true
-          signInDemo({
-            id: `demo-${cleanEmail.split("@")[0]}`,
-            email: cleanEmail,
-            fullName: username.trim() || cleanEmail.split("@")[0] || "Shopper",
-          })
-          router.push(target)
-          router.refresh()
-          return
-        }
         if (error.message.includes("Password should be")) {
           setFeedback({ type: "error", message: "Password must be at least 6 characters." })
         } else {
@@ -188,22 +140,10 @@ export function useAuthFlow() {
         setFeedback(null)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Network error"
-      if (isNetworkOrOfflineError(msg)) {
-        const cleanEmail = email.trim().toLowerCase()
-        redirectingRef.current = true
-        signInDemo({
-          id: `demo-${cleanEmail.split("@")[0]}`,
-          email: cleanEmail,
-          fullName: username.trim() || cleanEmail.split("@")[0] || "Shopper",
-        })
-        router.push(target)
-        router.refresh()
-        return
-      }
+      const msg = err instanceof Error ? err.message : "Could not reach Supabase Auth."
       setFeedback({ type: "error", message: msg })
     }
-  }, [email, password, username, router, switchMode, signInDemo])
+  }, [email, password, username, router, switchMode])
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -242,12 +182,7 @@ export function useAuthFlow() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Google sign-in failed."
-      setFeedback({
-        type: "info",
-        message: isNetworkOrOfflineError(message)
-          ? "Supabase OAuth is offline right now — use the 1-Click Demo buttons below to sign in instantly."
-          : message,
-      })
+      setFeedback({ type: "error", message })
       setIsGoogleLoading(false)
     }
   }, [])
@@ -255,7 +190,7 @@ export function useAuthFlow() {
   const handleForgotPassword = useCallback(() => {
     setFeedback({
       type: "info",
-      message: "Password reset is disabled in this portfolio demo — use a 1-click demo account below.",
+      message: "Use your registered credentials or sign in with Google or one-click role cards above.",
     })
   }, [])
 
@@ -266,8 +201,6 @@ export function useAuthFlow() {
       setFeedback(null)
       setIsLoading(true)
       const queryNext = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null
-      // Auto-guide Normal User to /profile and Demo Seller to /seller;
-      // never send a Normal User straight to the seller-only gate after login.
       const defaultTarget = accountId === "customer" ? "/profile" : "/seller"
       const target =
         queryNext &&
@@ -291,12 +224,12 @@ export function useAuthFlow() {
           router.refresh()
           return
         }
-        setFeedback({ type: "error", message: res.error ?? "Demo sign-in failed." })
+        setFeedback({ type: "error", message: res.error ?? "Sign-in failed." })
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
         }
       } catch {
-        setFeedback({ type: "error", message: "Demo sign-in failed. Please try again." })
+        setFeedback({ type: "error", message: "Sign-in failed. Please try again." })
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("stop-delivery-loading"))
         }

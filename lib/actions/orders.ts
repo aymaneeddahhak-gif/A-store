@@ -11,14 +11,8 @@ import {
 } from "@/lib/queries/products"
 import { validatePromo } from "@/lib/actions/promos"
 import { isAdminEmail } from "@/lib/admin"
+import { isUuid } from "@/lib/demo-seller-server"
 import { logAudit } from "@/lib/actions/audit"
-import { isSupabaseOffline } from "@/lib/supabase-circuit"
-import {
-  getFallbackOrders,
-  setFallbackOrders,
-  getFallbackProducts,
-  setFallbackProducts,
-} from "@/lib/fallback-catalog"
 import {
   ORDER_STATUSES,
   TRACKING_REQUIRED_STATUSES,
@@ -52,22 +46,6 @@ async function adjustStock(
   items: CartItem[],
   direction: 1 | -1
 ): Promise<void> {
-  if (isSupabaseOffline()) {
-    const products = getFallbackProducts()
-    setFallbackProducts(
-      products.map((p) => {
-        const line = items.find((i) => i.id === p.id)
-        if (!line) return p
-        const qty = Math.min(99, Math.max(1, Math.floor(Number(line.quantity) || 1)))
-        const cur = Math.max(0, Math.floor(Number(p.stock ?? 20)))
-        return { ...p, stock: Math.max(0, cur + direction * qty) }
-      })
-    )
-    invalidateProductCache()
-    revalidateTag(PRODUCTS_CACHE_TAG)
-    return
-  }
-
   try {
     const db = createSupabaseAdminClient() ?? fallback
     for (const item of items) {
@@ -91,7 +69,7 @@ async function adjustStock(
       }
     }
   } catch {
-    // Ignore stock error when DB is paused
+    // Non-fatal stock adjustment guard
   }
   invalidateProductCache()
   revalidateTag(PRODUCTS_CACHE_TAG)
@@ -157,7 +135,9 @@ export async function placeOrderAction(input: {
 
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
-    if (!auth?.user) return fail("You must be signed in to place an order.")
+    if (!auth?.user || !isUuid(auth.user.id)) {
+      return fail("You must be signed in to place an order.")
+    }
 
     const products = await listStoreProducts()
     const items: CartItem[] = []
@@ -186,37 +166,25 @@ export async function placeOrderAction(input: {
       promo_code: promo?.code ?? null,
     }
 
-    if (!isSupabaseOffline()) {
-      try {
-        const row: Record<string, unknown> = {
-          id: order.id,
-          user_id: order.user_id,
-          items: order.items,
-          total: order.total,
-          status: order.status,
-        }
-        if (promo?.code) row.promo_code = promo.code
-        const db = createSupabaseAdminClient() ?? supabase
-        let { error } = await db.from(ORDERS_TABLE).insert([row])
-        if (error && promo?.code && error.message.includes("promo_code")) {
-          delete row.promo_code
-          const retry = await db.from(ORDERS_TABLE).insert([row])
-          error = retry.error
-        }
-        if (!error) {
-          await adjustStock(supabase, items, -1)
-          revalidateTag(PRODUCTS_CACHE_TAG)
-          revalidatePath("/orders")
-          revalidatePath("/seller")
-          invalidateProductCache()
-          return ok(order)
-        }
-      } catch {
-        // Fall through to fallback order store
-      }
+    const row: Record<string, unknown> = {
+      id: order.id,
+      user_id: order.user_id,
+      items: order.items,
+      total: order.total,
+      status: order.status,
+    }
+    if (promo?.code) row.promo_code = promo.code
+    const db = createSupabaseAdminClient() ?? supabase
+    let { error } = await db.from(ORDERS_TABLE).insert([row])
+    if (error && promo?.code && error.message.includes("promo_code")) {
+      delete row.promo_code
+      const retry = await db.from(ORDERS_TABLE).insert([row])
+      error = retry.error
+    }
+    if (error) {
+      return fail(error.message || "Could not save order to Supabase.")
     }
 
-    setFallbackOrders([order, ...getFallbackOrders()])
     await adjustStock(supabase, items, -1)
     revalidateTag(PRODUCTS_CACHE_TAG)
     revalidatePath("/orders")
@@ -245,42 +213,8 @@ export async function updateOrderStatusAction(
       return fail("Restricted to the store team.")
     }
 
-    if (isSupabaseOffline()) {
-      const orders = getFallbackOrders()
-      const existing = orders.find((o) => o.id === orderId)
-      if (!existing) return fail("Order not found.")
-      const from = existing.status ?? "Pending"
-      if (from === status) return ok(null)
-      if (!orderNextStatuses(from).includes(status)) {
-        return fail(`An order that is ${from} cannot become ${status}.`)
-      }
-      const carrier = (shipment?.carrier ?? existing.carrier ?? "").trim()
-      const trackingNumber = (shipment?.trackingNumber ?? existing.tracking_number ?? "").trim()
-      if (TRACKING_REQUIRED_STATUSES.includes(status) && (!carrier || !trackingNumber)) {
-        return fail("Add the carrier and tracking number before shipping this order.", "tracking")
-      }
-      setFallbackOrders(
-        orders.map((o) =>
-          o.id === orderId
-            ? {
-                ...o,
-                status,
-                status_updated_at: new Date().toISOString(),
-                carrier: carrier || o.carrier,
-                tracking_number: trackingNumber || o.tracking_number,
-              }
-            : o
-        )
-      )
-      if (status === "Cancelled" && from !== "Cancelled") {
-        await adjustStock(supabase, existing.items ?? [], 1)
-      }
-      revalidatePath("/orders")
-      revalidatePath("/seller")
-      return ok(null)
-    }
-
-    const { data: row } = await supabase
+    const db = createSupabaseAdminClient() ?? supabase
+    const { data: row } = await db
       .from(ORDERS_TABLE)
       .select("id, status, carrier, tracking_number, items")
       .eq("id", orderId)
@@ -305,7 +239,6 @@ export async function updateOrderStatusAction(
       return fail("Add the carrier and tracking number before shipping this order.", "tracking")
     }
 
-    const db = createSupabaseAdminClient() ?? supabase
     const payload: Record<string, unknown> = {
       status,
       status_updated_at: new Date().toISOString(),
@@ -355,24 +288,8 @@ export async function updateOrderShipmentAction(
     if (!auth?.user) return fail("You must be signed in.")
     if (!isSellerEmail(auth.user.email)) return fail("Restricted to the store team.")
 
-    if (isSupabaseOffline()) {
-      const orders = getFallbackOrders()
-      const existing = orders.find((o) => o.id === orderId)
-      if (!existing) return fail("Order not found.")
-      if (existing.status === "Cancelled" || existing.status === "Delivered") {
-        return fail("This order is closed — its shipment details can no longer change.")
-      }
-      setFallbackOrders(
-        orders.map((o) =>
-          o.id === orderId ? { ...o, carrier: label, tracking_number: code } : o
-        )
-      )
-      revalidatePath("/orders")
-      revalidatePath("/seller")
-      return ok(null)
-    }
-
-    const { data: row } = await supabase
+    const db = createSupabaseAdminClient() ?? supabase
+    const { data: row } = await db
       .from(ORDERS_TABLE)
       .select("id, status")
       .eq("id", orderId)
@@ -383,7 +300,6 @@ export async function updateOrderShipmentAction(
       return fail("This order is closed — its shipment details can no longer change.")
     }
 
-    const db = createSupabaseAdminClient() ?? supabase
     const res = await db
       .from(ORDERS_TABLE)
       .update({ carrier: label, tracking_number: code })
@@ -418,28 +334,8 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     const { data: auth } = await supabase.auth.getUser()
     if (!auth?.user) return fail("You must be signed in.")
 
-    if (isSupabaseOffline()) {
-      const orders = getFallbackOrders()
-      const order = orders.find((o) => o.id === orderId)
-      if (!order) return fail("Order not found.")
-      if (order.status === "Cancelled") return fail("This order is already cancelled.")
-      if (order.status === "Shipped" || order.status === "Delivered") {
-        return fail("This order has shipped and can no longer be cancelled.")
-      }
-      setFallbackOrders(
-        orders.map((o) =>
-          o.id === orderId
-            ? { ...o, status: "Cancelled", status_updated_at: new Date().toISOString() }
-            : o
-        )
-      )
-      await adjustStock(supabase, order.items ?? [], 1)
-      revalidatePath("/orders")
-      revalidatePath("/seller")
-      return ok(null)
-    }
-
-    const { data: row } = await supabase
+    const db = createSupabaseAdminClient() ?? supabase
+    const { data: row } = await db
       .from(ORDERS_TABLE)
       .select("user_id, status, items")
       .eq("id", orderId)
@@ -463,7 +359,6 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
       return fail("This order has shipped and can no longer be cancelled.")
     }
 
-    const db = createSupabaseAdminClient() ?? supabase
     const { error } = await db
       .from(ORDERS_TABLE)
       .update({ status: "Cancelled", status_updated_at: new Date().toISOString() })
@@ -501,12 +396,12 @@ export async function fetchMyOrdersAction(): Promise<ActionResult<Order[]>> {
   try {
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
-    if (!auth?.user) return ok([])
+    if (!auth?.user || !isUuid(auth.user.id)) return ok([])
 
     const orders = await listOrdersForUser(auth.user.id)
     return ok(orders)
   } catch {
-    return ok(getFallbackOrders())
+    return fail("Could not load orders from Supabase.")
   }
 }
 
@@ -514,10 +409,12 @@ export async function fetchAllOrdersAction(): Promise<ActionResult<Order[]>> {
   try {
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
-    if (!auth?.user) return ok([])
+    if (!auth?.user || !isSellerEmail(auth.user.email)) {
+      return fail("Restricted to the store team.")
+    }
 
     return ok(await listAllOrders())
   } catch {
-    return ok(getFallbackOrders())
+    return fail("Could not load orders from Supabase.")
   }
 }

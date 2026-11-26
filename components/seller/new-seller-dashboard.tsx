@@ -14,19 +14,10 @@ import {
 } from "@/lib/actions/orders"
 import {
   listSellerProductsAction,
-  resetDemoSellerProductsAction,
   toggleFeaturedAction,
 } from "@/lib/actions/products"
 import { isAdminEmail } from "@/lib/admin"
 import { isSellerEmail } from "@/lib/seller"
-import {
-  isDemoSellerUser,
-  getDemoSellerProducts,
-  saveDemoSellerProducts,
-  INITIAL_DEMO_SELLER_PRODUCTS,
-} from "@/lib/demo-seller-products"
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import type { Order, Product } from "@/lib/types"
 import { SellerRestrictedGate } from "@/components/seller/restricted-gate"
 import { useSellerNav } from "@/contexts/providers/seller-nav-context"
@@ -85,10 +76,8 @@ import {
 import type { ProductItem } from "./new-design/types"
 
 /**
- * Seller dashboard — the newsellerdahbord design, rendered on the website's
- * own page background (no decorative backdrop). Overview/products/add-form
- * are the design's exact components fed with live Supabase rows; orders use
- * the website's order design; offers use the live discount popup system.
+ * Seller dashboard — pure Supabase-backed CRUD for products, stock, offers,
+ * and orders for both Seller and Admin accounts.
  */
 export function NewSellerDashboard() {
   const {
@@ -104,13 +93,8 @@ export function NewSellerDashboard() {
   const { showToast } = useToast()
   const { isDarkMode } = useThemeContext()
   const isAdmin = isAdminEmail(user?.email)
-  // Seller dashboard & fulfilment are restricted strictly to Seller + Admin accounts.
   const canManageOrders = isSellerEmail(user?.email)
-  const isDemoSeller = !isAdmin && isDemoSellerUser(user?.email)
-  const isOfflineDemoSandbox = isDemoSeller && !UUID_RE.test(user?.id ?? "")
-  const [isResettingDemo, setIsResettingDemo] = useState(false)
 
-  // Tab lives in shared context: the rail flyout and this page drive it.
   const { sellerTab: activeTab, setSellerTab: setActiveTab } = useSellerNav()
   const { pushNotification } = useNotifications()
   const [monthKey, setMonthKey] = useState<string | null>(null)
@@ -132,6 +116,16 @@ export function NewSellerDashboard() {
     window.setTimeout(() => setToastMessage(null), 3000)
   }, [])
 
+  const reloadSellerProducts = useCallback(async () => {
+    const res = await listSellerProductsAction()
+    if (res.ok) {
+      setSellerProducts(res.data)
+    } else {
+      setSellerProducts([])
+      showToastMsg(res.error || "Could not load products from Supabase.")
+    }
+  }, [showToastMsg])
+
   useEffect(() => {
     if (!user || !canManageOrders) {
       setAllOrders([])
@@ -142,14 +136,11 @@ export function NewSellerDashboard() {
     void fetchAllOrdersAction().then((res) => {
       if (active && res.ok) setAllOrders(res.data)
     })
-    if (isOfflineDemoSandbox) {
-      setSellerProducts(getDemoSellerProducts())
-    } else {
-      void listSellerProductsAction().then((res) => {
-        if (active && res.ok) setSellerProducts(res.data)
-        else if (active) setSellerProducts([])
-      })
-    }
+    void listSellerProductsAction().then((res) => {
+      if (!active) return
+      if (res.ok) setSellerProducts(res.data)
+      else setSellerProducts([])
+    })
     void listSubscribersAction().then((res) => {
       if (active && res.ok) setSubscribers(res.data)
     })
@@ -164,34 +155,16 @@ export function NewSellerDashboard() {
     return () => {
       active = false
     }
-  }, [user, canManageOrders, isOfflineDemoSandbox])
+  }, [user, canManageOrders])
 
-  // Pin/unpin a store product from the homepage showcase (admin only, DB-backed).
   const handleToggleFeatured = useCallback(
     async (productId: string, featured: boolean) => {
-      if (isOfflineDemoSandbox) {
-        const id = Number(productId)
-        setSellerProducts((prev) => {
-          const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, featured } : p))
-          saveDemoSellerProducts(updated)
-          return updated
-        })
-        showToastMsg(
-          featured
-            ? "Pinned to the showcase (demo seller)."
-            : "Removed from the showcase (demo seller)."
-        )
-        return
-      }
       const id = Number(productId)
       const res = await toggleFeaturedAction(id, featured)
       if (!res.ok) {
         showToastMsg(res.error || "Could not update the homepage showcase.")
         return
       }
-      // Optimistic patch for the list in front of the admin, then re-read the
-      // catalog so the showcase card (and any tab still holding a stale seed)
-      // converges on what the database now says.
       setSellerProducts((prev) =>
         prev ? prev.map((p) => (p.id === id ? { ...p, featured } : p)) : prev
       )
@@ -203,7 +176,7 @@ export function NewSellerDashboard() {
           : "Removed from the homepage showcase."
       )
     },
-    [patchProductLocal, refreshProducts, showToastMsg, isOfflineDemoSandbox]
+    [patchProductLocal, refreshProducts, showToastMsg]
   )
 
   const handleStatusChange = useCallback(
@@ -263,11 +236,6 @@ export function NewSellerDashboard() {
     [sellerProducts]
   )
 
-  // Store products the admin can pin to the homepage showcase. Built from the
-  // seller's own rows (read straight from the database on every load, and
-  // patched the moment a pin lands) rather than the storefront catalog seed,
-  // which is a streamed snapshot. Sandbox rows owned by a tester are excluded —
-  // featuring is a store-level flag.
   const showcaseItems: ShowcaseProduct[] = useMemo(
     () =>
       (sellerProducts ?? [])
@@ -297,7 +265,6 @@ export function NewSellerDashboard() {
     () => buildOverviewProps(visibleOrders, sellerProducts ?? []),
     [visibleOrders, sellerProducts]
   )
-  // Real buyer identities (admin only) keyed by user id for the order console.
   const buyerDirectory = useMemo(() => {
     const map: Record<string, { name: string; email: string }> = {}
     for (const profile of customerProfiles ?? []) {
@@ -329,58 +296,17 @@ export function NewSellerDashboard() {
 
   const handleDeleteProduct = useCallback(
     async (productId: string) => {
-      if (isOfflineDemoSandbox) {
-        const id = Number(productId)
-        setSellerProducts((prev) => {
-          const updated = (prev ?? []).filter((p) => p.id !== id)
-          saveDemoSellerProducts(updated)
-          return updated
-        })
-        showToastMsg("Product deleted from demo seller inventory.")
-        return
-      }
       const ok = await deleteProduct(Number(productId))
-      if (ok) setSellerProducts((prev) => (prev ?? []).filter((p) => p.id !== Number(productId)))
+      if (ok) {
+        setSellerProducts((prev) => (prev ?? []).filter((p) => p.id !== Number(productId)))
+      }
     },
-    [deleteProduct, isOfflineDemoSandbox, showToastMsg]
+    [deleteProduct]
   )
-
-  const handleResetDemo = useCallback(async () => {
-    if (!isDemoSeller || isResettingDemo) return
-    setIsResettingDemo(true)
-    try {
-      if (isOfflineDemoSandbox) {
-        const fresh = INITIAL_DEMO_SELLER_PRODUCTS.map((p) => ({ ...p }))
-        saveDemoSellerProducts(fresh)
-        setSellerProducts(fresh)
-        showToastMsg("Demo products reset to the 3 starter examples.")
-        return
-      }
-      const res = await resetDemoSellerProductsAction()
-      if (res.ok) {
-        setSellerProducts(res.data)
-        showToastMsg("Demo products reset to the 3 starter examples.")
-      } else {
-        showToastMsg(res.error || "Could not reset demo products.")
-      }
-    } finally {
-      setIsResettingDemo(false)
-    }
-  }, [isDemoSeller, isOfflineDemoSandbox, isResettingDemo, showToastMsg])
 
   const handleUpdateStock = useCallback(
     async (productId: string, newStock: string) => {
       const stock = Math.max(0, Math.floor(Number(newStock) || 0))
-      if (isOfflineDemoSandbox) {
-        const id = Number(productId)
-        setSellerProducts((prev) => {
-          const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, stock } : p))
-          saveDemoSellerProducts(updated)
-          return updated
-        })
-        showToastMsg("Stock updated in demo seller inventory.")
-        return
-      }
       const ok = await updateProduct(Number(productId), { stock })
       if (ok) {
         setSellerProducts((prev) =>
@@ -388,57 +314,15 @@ export function NewSellerDashboard() {
         )
       }
     },
-    [updateProduct, isOfflineDemoSandbox, showToastMsg]
+    [updateProduct]
   )
 
   const handleSaved = useCallback(
     async (payload: ReturnType<typeof toProductPayload>, editingId: string | null) => {
-      if (isOfflineDemoSandbox) {
-        if (editingId) {
-          const id = Number(editingId)
-          setSellerProducts((prev) => {
-            const updated = (prev ?? []).map((p) => (p.id === id ? { ...p, ...payload } : p))
-            saveDemoSellerProducts(updated)
-            return updated
-          })
-          setEditingProductId(null)
-          setIsCreatingProduct(false)
-          showToastMsg(`Product "${payload.name}" updated successfully.`)
-          return true
-        }
-        const createdProduct: Product = {
-          id: Date.now(),
-          name: payload.name,
-          price: payload.price,
-          original_price: payload.original_price,
-          category: payload.category,
-          image: payload.image || "/images/product/RMADRIDKIT.png",
-          images: payload.images?.length ? payload.images : [payload.image || "/images/product/RMADRIDKIT.png"],
-          video: payload.video,
-          description: payload.description,
-          stock: payload.stock,
-          is_published: payload.is_published ?? false,
-          featured: false,
-          user_id: user?.id || "demo-seller-role-id",
-          likes: 0,
-          rating: 5,
-          reviews: [],
-        }
-        setSellerProducts((prev) => {
-          const updated = [...(prev ?? []), createdProduct]
-          saveDemoSellerProducts(updated)
-          return updated
-        })
-        setIsCreatingProduct(false)
-        showToastMsg(`Product "${createdProduct.name}" added successfully.`)
-        return true
-      }
       if (editingId) {
         const ok = await updateProduct(Number(editingId), payload)
         if (ok) {
-          setSellerProducts((prev) =>
-            (prev ?? []).map((p) => (p.id === Number(editingId) ? { ...p, ...payload } : p))
-          )
+          await reloadSellerProducts()
           setEditingProductId(null)
           setIsCreatingProduct(false)
           showToastMsg(`Product "${payload.name}" updated successfully.`)
@@ -449,9 +333,7 @@ export function NewSellerDashboard() {
       }
       const created = await addProduct(payload)
       if (created) {
-        if (isAdmin || created.user_id === user?.id) {
-          setSellerProducts((prev) => [...(prev ?? []), created])
-        }
+        await reloadSellerProducts()
         setIsCreatingProduct(false)
         showToastMsg(`Product "${created.name}" added successfully.`)
         return true
@@ -459,7 +341,7 @@ export function NewSellerDashboard() {
       showToastMsg("Could not save the product — please try again.")
       return false
     },
-    [addProduct, updateProduct, isAdmin, isOfflineDemoSandbox, user?.id, showToastMsg]
+    [addProduct, updateProduct, reloadSellerProducts, showToastMsg]
   )
 
   const closeForm = useCallback(() => {
@@ -467,8 +349,6 @@ export function NewSellerDashboard() {
     setEditingProductId(null)
   }, [])
 
-  // Show the full-width Seller Dashboard screenshot showcase with Sign-In CTA
-  // right on /seller for logged-out visitors AND normal non-seller customers.
   if (!authLoading && (!user || !canManageOrders)) {
     return <SellerRestrictedGate isSignedInNonSeller={Boolean(user && !canManageOrders)} />
   }
@@ -544,6 +424,9 @@ export function NewSellerDashboard() {
             isDarkMode={isDarkMode}
             products={sellerProducts ?? []}
             isAdmin={isAdmin}
+            onApplied={async () => {
+              await Promise.all([reloadSellerProducts(), refreshProducts()])
+            }}
           />
         )
 
@@ -605,8 +488,6 @@ export function NewSellerDashboard() {
               onUpdateStock={(id, stock) => void handleUpdateStock(id, stock)}
               onToggleFeatured={(id, featured) => void handleToggleFeatured(id, featured)}
               canFeature={isAdmin}
-              onResetDemo={isDemoSeller ? () => void handleResetDemo() : undefined}
-              isResettingDemo={isResettingDemo}
               onShowToast={showToastMsg}
             />
           )

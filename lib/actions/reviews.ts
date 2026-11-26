@@ -2,9 +2,8 @@
 
 import { revalidatePath, revalidateTag } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { PRODUCTS_CACHE_TAG, invalidateProductCache } from "@/lib/queries/products"
-import { isSupabaseOffline } from "@/lib/supabase-circuit"
-import { getFallbackProducts, setFallbackProducts } from "@/lib/fallback-catalog"
 import type { Review } from "@/lib/types"
 
 const PRODUCTS_TABLE = "products"
@@ -43,21 +42,6 @@ function validate(input: NewReviewInput): string | null {
   return null
 }
 
-function persistReviewInFallback(productId: number, newReview: Review) {
-  const products = getFallbackProducts()
-  setFallbackProducts(
-    products.map((p) => {
-      if (p.id !== productId) return p
-      const reviews = [newReview, ...(p.reviews ?? [])]
-      const avg = reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
-      return { ...p, reviews, rating: parseFloat(avg.toFixed(1)) }
-    })
-  )
-  invalidateProductCache()
-  revalidateTag(PRODUCTS_CACHE_TAG)
-  revalidatePath(`/product/${productId}`)
-}
-
 export async function addReviewAction(
   productId: number,
   input: NewReviewInput
@@ -76,11 +60,15 @@ export async function addReviewAction(
   try {
     const supabase = await createSupabaseServerClient()
     const { data: auth } = await supabase.auth.getUser()
+    if (!auth?.user) {
+      return { ok: false, error: "Please sign in to post a review." }
+    }
+
     const authorName =
-      (auth?.user?.user_metadata?.username as string | undefined) ||
-      (auth?.user?.user_metadata?.full_name as string | undefined) ||
-      auth?.user?.email?.split("@")[0] ||
-      "Guest"
+      (auth.user.user_metadata?.username as string | undefined) ||
+      (auth.user.user_metadata?.full_name as string | undefined) ||
+      auth.user.email?.split("@")[0] ||
+      "Customer"
 
     const newReview: Review = {
       id: crypto.randomUUID(),
@@ -92,28 +80,23 @@ export async function addReviewAction(
       ...(photos ? { photos } : {}),
     }
 
-    if (isSupabaseOffline()) {
-      persistReviewInFallback(productId, newReview)
-      return { ok: true, data: newReview, persisted: true }
-    }
-
-    const { data: row } = await supabase
+    const db = createSupabaseAdminClient() ?? supabase
+    const { data: row, error: readErr } = await db
       .from(PRODUCTS_TABLE)
       .select("reviews")
       .eq("id", productId)
       .maybeSingle()
 
-    if (isSupabaseOffline()) {
-      persistReviewInFallback(productId, newReview)
-      return { ok: true, data: newReview, persisted: true }
+    if (readErr || !row) {
+      return { ok: false, error: readErr?.message || "Product not found." }
     }
 
-    const existing: Review[] = Array.isArray(row?.reviews) ? (row.reviews as Review[]) : []
+    const existing: Review[] = Array.isArray(row.reviews) ? (row.reviews as Review[]) : []
     const updatedReviews = [newReview, ...existing]
     const avgRating =
       updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length
 
-    const { error } = await supabase
+    const { error } = await db
       .from(PRODUCTS_TABLE)
       .update({
         reviews: updatedReviews,
@@ -122,27 +105,17 @@ export async function addReviewAction(
       .eq("id", productId)
 
     if (error) {
-      return { ok: true, data: newReview, persisted: false }
+      return { ok: false, error: error.message }
     }
 
     revalidateTag(PRODUCTS_CACHE_TAG)
     revalidatePath(`/product/${productId}`)
     invalidateProductCache()
     return { ok: true, data: newReview, persisted: true }
-  } catch {
-    const fallbackReview: Review = {
-      id: crypto.randomUUID(),
-      user: "Guest",
-      rating,
-      comment,
-      date: new Date().toISOString(),
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest",
-      ...(photos ? { photos } : {}),
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not save review to Supabase.",
     }
-    if (isSupabaseOffline()) {
-      persistReviewInFallback(productId, fallbackReview)
-      return { ok: true, data: fallbackReview, persisted: true }
-    }
-    return { ok: true, data: fallbackReview, persisted: false }
   }
 }

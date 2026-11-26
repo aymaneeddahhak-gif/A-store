@@ -204,7 +204,6 @@ export function AddProductView({
     setImages([
       "/images/product/airpods.png",
       "/images/product/iphone-17.png",
-      "/videos/product/earpodsvideos.mp4",
     ])
     setVideo("/videos/product/earpodsvideos.mp4")
     setActiveImage(0)

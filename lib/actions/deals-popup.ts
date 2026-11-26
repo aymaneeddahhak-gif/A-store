@@ -5,14 +5,14 @@ import { createClient } from "@supabase/supabase-js"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { isAdminEmail } from "@/lib/admin"
+import { isSellerEmail } from "@/lib/seller"
 import { logAudit } from "@/lib/actions/audit"
-import { createResilientFetch, isSupabaseOffline } from "@/lib/supabase-circuit"
-import { getFallbackProducts, setFallbackProducts } from "@/lib/fallback-catalog"
+import { createResilientFetch } from "@/lib/supabase-circuit"
 import { PRODUCTS_CACHE_TAG, invalidateProductCache } from "@/lib/queries/products"
 
 const TABLE = "deals_popup"
 const DEALS_REVALIDATE_MS = 900_000
-const DEALS_QUERY_TIMEOUT_MS = 1200
+const DEALS_QUERY_TIMEOUT_MS = 4000
 
 export interface DealsPopupConfig {
   enabled: boolean
@@ -35,11 +35,6 @@ interface DealsCacheSlot {
 }
 
 const globalDeals = globalThis as unknown as {
-  __astoreFallbackDealsConfig?: DealsPopupConfig
-  __astoreFallbackDealsSnapshot?: {
-    applied_percent: number | null
-    previous_prices: { id: number; price: number; original_price: number | null }[]
-  }
   __astoreDealsCache?: DealsCacheSlot
 }
 
@@ -72,19 +67,16 @@ function createAnonDealsClient() {
 
 /**
  * Cookie-less public config read — avoids calling `cookies()` during HomePage
- * rendering so `/` is not forced dynamic by session cookies.
+ * rendering so `/` stays fast and cacheable.
  */
 export async function getDealsPopupAction(): Promise<DealsPopupResult<DealsPopupConfig>> {
-  const fallback = globalDeals.__astoreFallbackDealsConfig ?? DEFAULT_DEALS_POPUP
-  if (isSupabaseOffline()) return { ok: true, data: fallback }
-
   const slot = getDealsCache()
   if (!slot.dirty && Date.now() - slot.at < DEALS_REVALIDATE_MS) {
     return { ok: true, data: slot.data }
   }
 
   const anon = createAnonDealsClient()
-  if (!anon) return { ok: true, data: fallback }
+  if (!anon) return { ok: true, data: slot.data }
 
   try {
     const result = await Promise.race([
@@ -102,7 +94,7 @@ export async function getDealsPopupAction(): Promise<DealsPopupResult<DealsPopup
     ])
 
     if (result.error || !result.data) {
-      return { ok: true, data: slot.dirty ? fallback : slot.data }
+      return { ok: true, data: slot.data }
     }
     const resolved: DealsPopupConfig = {
       enabled: (result.data as Partial<DealsPopupConfig>).enabled ?? true,
@@ -116,7 +108,7 @@ export async function getDealsPopupAction(): Promise<DealsPopupResult<DealsPopup
     slot.dirty = false
     return { ok: true, data: resolved }
   } catch {
-    return { ok: true, data: slot.dirty ? fallback : slot.data }
+    return { ok: true, data: slot.data }
   }
 }
 
@@ -137,34 +129,9 @@ export async function updateDealsPopupAction(
     button_label: input.button_label.trim().slice(0, 24) || DEFAULT_DEALS_POPUP.button_label,
   }
 
-  if (isSupabaseOffline()) {
-    globalDeals.__astoreFallbackDealsConfig = {
-      enabled: row.enabled,
-      title: row.title,
-      subtitle: row.subtitle,
-      button_label: row.button_label,
-    }
-    invalidateDealsCache()
-    revalidatePath("/")
-    return { ok: true, data: { ...row } }
-  }
-
   const db = createSupabaseAdminClient() ?? supabase
   const { error } = await db.from(TABLE).upsert([row], { onConflict: "id" })
-  if (error) {
-    if (isSupabaseOffline()) {
-      globalDeals.__astoreFallbackDealsConfig = {
-        enabled: row.enabled,
-        title: row.title,
-        subtitle: row.subtitle,
-        button_label: row.button_label,
-      }
-      invalidateDealsCache()
-      revalidatePath("/")
-      return { ok: true, data: { ...row } }
-    }
-    return { ok: false, error: error.message }
-  }
+  if (error) return { ok: false, error: error.message }
 
   invalidateDealsCache()
   revalidatePath("/")
@@ -177,78 +144,31 @@ export async function updateDealsPopupAction(
   return { ok: true, data: { ...row } }
 }
 
-function applyPercentToFallback(pct: number): void {
-  const products = getFallbackProducts().filter((p) => p.user_id == null)
-  const targets = products.filter((p) => {
-    const currentPct =
-      p.original_price && p.original_price > p.price
-        ? Math.round((1 - p.price / p.original_price) * 100)
-        : 0
-    return currentPct !== pct
-  })
-  const previous = targets.map((p) => ({
-    id: p.id,
-    price: p.price,
-    original_price: p.original_price ?? null,
-  }))
-  globalDeals.__astoreFallbackDealsSnapshot = {
-    applied_percent: pct,
-    previous_prices: previous,
-  }
-  const updates = new Map(
-    targets.map((p) => {
-      const base = p.original_price && p.original_price > p.price ? p.original_price : p.price
-      return [
-        p.id,
-        {
-          price: Math.round(base * (1 - pct / 100) * 100) / 100,
-          original_price: base,
-        },
-      ]
-    })
-  )
-  setFallbackProducts(
-    getFallbackProducts().map((p) => {
-      const patch = updates.get(p.id)
-      return patch ? { ...p, ...patch } : p
-    })
-  )
-  invalidateProductCache()
-  revalidateTag(PRODUCTS_CACHE_TAG)
-  revalidatePath("/")
-}
-
 export async function applyDealsPercentAction(
   percent: number
 ): Promise<DealsPopupResult<number>> {
   const supabase = await createSupabaseServerClient()
   const { data: auth } = await supabase.auth.getUser()
-  if (!auth?.user || !isAdminEmail(auth.user.email)) {
-    return { ok: false, error: "Restricted to the store admin." }
+  if (!auth?.user || !isSellerEmail(auth.user.email)) {
+    return { ok: false, error: "Seller account required to apply offers." }
   }
   const pct = Math.round(Number(percent))
   if (!Number.isFinite(pct) || pct < 1 || pct > 100) {
     return { ok: false, error: "Percent must be between 1 and 100." }
   }
 
-  if (isSupabaseOffline()) {
-    applyPercentToFallback(pct)
-    return { ok: true, data: pct }
-  }
-
+  const admin = isAdminEmail(auth.user.email)
   const db = createSupabaseAdminClient() ?? supabase
-  const { data: rows, error: readErr } = await db
-    .from("products")
-    .select("id, price, original_price")
-    .is("user_id", null)
-  if (readErr) {
-    if (isSupabaseOffline()) {
-      applyPercentToFallback(pct)
-      return { ok: true, data: pct }
-    }
-    return { ok: false, error: readErr.message }
-  }
+  let readQuery = db.from("products").select("id, price, original_price")
+  readQuery = admin ? readQuery.is("user_id", null) : readQuery.eq("user_id", auth.user.id)
+
+  const { data: rows, error: readErr } = await readQuery
+  if (readErr) return { ok: false, error: readErr.message }
+
   const products = (rows ?? []) as { id: number; price: number; original_price: number | null }[]
+  if (products.length === 0) {
+    return { ok: false, error: "Add at least one product before applying an offer." }
+  }
 
   const targets = products.filter((p) => {
     const currentPct =
@@ -257,11 +177,6 @@ export async function applyDealsPercentAction(
         : 0
     return currentPct !== pct
   })
-  const previous = targets.map((p) => ({
-    id: p.id,
-    price: p.price,
-    original_price: p.original_price,
-  }))
 
   const updates = targets.map((p) => {
     const base = p.original_price && p.original_price > p.price ? p.original_price : p.price
@@ -271,91 +186,76 @@ export async function applyDealsPercentAction(
       original_price: base,
     }
   })
+
   for (const u of updates) {
-    const { error } = await db
+    let updQuery = db
       .from("products")
       .update({ price: u.price, original_price: u.original_price })
       .eq("id", u.id)
+    if (!admin) updQuery = updQuery.eq("user_id", auth.user.id)
+    const { error } = await updQuery
     if (error) return { ok: false, error: error.message }
   }
 
-  await db
-    .from(TABLE)
-    .upsert([{ id: 1, applied_percent: pct, previous_prices: previous } as never], {
-      onConflict: "id",
-    })
+  if (admin) {
+    await db
+      .from(TABLE)
+      .upsert([{ id: 1, applied_percent: pct }], { onConflict: "id" })
+  }
 
   invalidateProductCache()
   revalidateTag(PRODUCTS_CACHE_TAG)
   revalidatePath("/")
+  revalidatePath("/seller")
   void logAudit({
     actorId: auth.user.id,
     actorEmail: auth.user.email,
     action: "update",
-    entity: `admin offer ${pct}% applied to ${updates.length} products`,
+    entity: `offer ${pct}% applied to ${updates.length} products`,
   })
   return { ok: true, data: pct }
-}
-
-function clearFallbackOffer(): void {
-  const snap = globalDeals.__astoreFallbackDealsSnapshot?.previous_prices ?? []
-  if (snap.length > 0) {
-    const byId = new Map(snap.map((p) => [p.id, p]))
-    setFallbackProducts(
-      getFallbackProducts().map((p) => {
-        const orig = byId.get(p.id)
-        return orig ? { ...p, price: orig.price, original_price: orig.original_price } : p
-      })
-    )
-  }
-  globalDeals.__astoreFallbackDealsSnapshot = { applied_percent: null, previous_prices: [] }
-  invalidateProductCache()
-  revalidateTag(PRODUCTS_CACHE_TAG)
-  revalidatePath("/")
 }
 
 export async function clearAppliedPercentAction(): Promise<DealsPopupResult<null>> {
   const supabase = await createSupabaseServerClient()
   const { data: auth } = await supabase.auth.getUser()
-  if (!auth?.user || !isAdminEmail(auth.user.email)) {
-    return { ok: false, error: "Restricted to the store admin." }
+  if (!auth?.user || !isSellerEmail(auth.user.email)) {
+    return { ok: false, error: "Seller account required to clear offers." }
   }
 
-  if (isSupabaseOffline()) {
-    clearFallbackOffer()
-    return { ok: true, data: null }
-  }
-
+  const admin = isAdminEmail(auth.user.email)
   const db = createSupabaseAdminClient() ?? supabase
-  const { data: row } = await db
-    .from(TABLE)
-    .select("previous_prices")
-    .eq("id", 1)
-    .maybeSingle()
-  const snapshot =
-    (row as { previous_prices?: { id: number; price: number; original_price: number | null }[] } | null)
-      ?.previous_prices ?? []
-  for (const p of snapshot) {
-    await db
+  let readQuery = db.from("products").select("id, price, original_price")
+  readQuery = admin ? readQuery.is("user_id", null) : readQuery.eq("user_id", auth.user.id)
+
+  const { data: rows, error: readErr } = await readQuery
+  if (readErr) return { ok: false, error: readErr.message }
+
+  const discounted = ((rows ?? []) as { id: number; price: number; original_price: number | null }[])
+    .filter((p) => p.original_price !== null && p.original_price > p.price)
+
+  for (const p of discounted) {
+    let updQuery = db
       .from("products")
-      .update({ price: p.price, original_price: p.original_price })
+      .update({ price: p.original_price, original_price: null })
       .eq("id", p.id)
+    if (!admin) updQuery = updQuery.eq("user_id", auth.user.id)
+    const { error } = await updQuery
+    if (error) return { ok: false, error: error.message }
   }
-  const { error } = await db
-    .from(TABLE)
-    .update({ applied_percent: null, previous_prices: null })
-    .eq("id", 1)
-  if (error) {
-    if (isSupabaseOffline()) {
-      clearFallbackOffer()
-      return { ok: true, data: null }
-    }
-    return { ok: false, error: error.message }
+
+  if (admin) {
+    const { error } = await db
+      .from(TABLE)
+      .update({ applied_percent: null })
+      .eq("id", 1)
+    if (error) return { ok: false, error: error.message }
   }
 
   invalidateProductCache()
   revalidateTag(PRODUCTS_CACHE_TAG)
   revalidatePath("/")
+  revalidatePath("/seller")
   void logAudit({
     actorId: auth.user.id,
     actorEmail: auth.user.email,

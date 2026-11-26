@@ -11,8 +11,11 @@ import React, {
 } from "react"
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
-import { demoSignOutAction } from "@/lib/actions/demo-login"
-import { isSupabaseOffline } from "@/lib/supabase-circuit"
+import {
+  demoSignOutAction,
+  getSignedDemoSessionUserAction,
+  updateDemoProfileMetadataAction,
+} from "@/lib/actions/demo-login"
 import { useToast } from "@/contexts/toast-context"
 
 const DEMO_STORAGE_KEY = "astore_demo_user"
@@ -77,6 +80,8 @@ function hasStoredSupabaseAuth(): boolean {
 function writeDemoSession(input: DemoUserInput | null) {
   if (typeof window === "undefined") return
   try {
+    // Clean up legacy global likes storage so likes never leak across users.
+    window.localStorage.removeItem("justshop_likes")
     if (!input) {
       window.localStorage.removeItem(DEMO_STORAGE_KEY)
       document.cookie = `${DEMO_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`
@@ -120,12 +125,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(storedDemo)
       setIsDemoSession(true)
       setAuthLoading(false)
+      // Revalidate signed cookie + hydrate fresh user_metadata from Supabase Auth.
+      void getSignedDemoSessionUserAction().then((live) => {
+        if (live) {
+          writeDemoSession(live)
+          setUser(buildSyntheticUser(live))
+        } else {
+          writeDemoSession(null)
+          setUser(null)
+          setIsDemoSession(false)
+        }
+      })
       return
     }
 
-    // No local demo session AND no Supabase token stored (or circuit already open):
-    // resolve immediately on mount instead of hitting the network or blocking UI.
-    if (isSupabaseOffline() || !hasStoredSupabaseAuth()) {
+    if (!hasStoredSupabaseAuth()) {
       setUser(null)
       setIsDemoSession(false)
       setAuthLoading(false)
@@ -164,19 +178,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInDemo = useCallback(
     (input: DemoUserInput) => {
-      const existing = readStoredDemoRecord()
-      const merged: DemoUserInput =
-        existing && existing.email.toLowerCase() === input.email.toLowerCase()
-          ? {
-              ...input,
-              metadata: { ...(existing.metadata ?? {}), ...(input.metadata ?? {}) },
-            }
-          : input
-      writeDemoSession(merged)
-      setUser(buildSyntheticUser(merged))
+      writeDemoSession(input)
+      setUser(buildSyntheticUser(input))
       setIsDemoSession(true)
       setAuthLoading(false)
-      showToast(`Signed in as ${merged.fullName}`, "success")
+      showToast(`Signed in as ${input.fullName}`, "success")
     },
     [showToast]
   )
@@ -189,8 +195,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return { error: "You must be signed in." }
 
       const demoRecord = readStoredDemoRecord()
-      if (demoRecord || isDemoSession || isSupabaseOffline()) {
-        const nextMeta = { ...(user.user_metadata ?? {}), ...patch }
+      if (demoRecord || isDemoSession) {
+        const res = await updateDemoProfileMetadataAction(patch, options)
+        if (!res.ok) return { error: res.error || "Could not save profile to Supabase." }
+
+        const nextMeta = res.metadata ?? { ...(user.user_metadata ?? {}), ...patch }
         const nextName =
           typeof nextMeta.full_name === "string" && nextMeta.full_name.trim()
             ? nextMeta.full_name.trim()
@@ -223,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await Promise.allSettled([demoSignOutAction(), supabase.auth.signOut()])
     } catch {
-      // Ignore network errors when Supabase is paused
+      // Ignore transient sign-out error
     }
     setUser(null)
     showToast("You have been signed out.", "success")

@@ -1,9 +1,8 @@
 import "server-only"
 
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { migrateProductAssetPaths } from "@/lib/product-media"
-import { isSupabaseOffline } from "@/lib/supabase-circuit"
-import { getFallbackOrders } from "@/lib/fallback-catalog"
 import type { CartItem, Order } from "@/lib/types"
 
 const ORDERS_TABLE = "orders"
@@ -28,48 +27,34 @@ function sanitizeOrder(order: Order): Order {
 }
 
 export async function listOrdersForUser(userId: string): Promise<Order[]> {
-  if (isSupabaseOffline()) {
-    return getFallbackOrders()
-      .filter((o) => o.user_id === userId || userId.startsWith("demo-"))
-      .map(sanitizeOrder)
-  }
   try {
     const supabase = await createSupabaseServerClient()
-    const { data, error } = await supabase
+    const db = createSupabaseAdminClient() ?? supabase
+    const { data, error } = await db
       .from(ORDERS_TABLE)
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
 
-    if (error) {
-      return getFallbackOrders()
-        .filter((o) => o.user_id === userId || userId.startsWith("demo-"))
-        .map(sanitizeOrder)
-    }
-    return ((data as Order[]) ?? []).map(sanitizeOrder)
+    if (error || !data) return []
+    return (data as Order[]).map(sanitizeOrder)
   } catch {
-    return getFallbackOrders()
-      .filter((o) => o.user_id === userId || userId.startsWith("demo-"))
-      .map(sanitizeOrder)
+    return []
   }
 }
 
 export async function listAllOrders(): Promise<Order[]> {
-  if (isSupabaseOffline()) {
-    return getFallbackOrders().map(sanitizeOrder)
-  }
   try {
     const supabase = await createSupabaseServerClient()
-    const { data, error } = await supabase
+    const db = createSupabaseAdminClient() ?? supabase
+    const { data, error } = await db
       .from(ORDERS_TABLE)
       .select("*")
       .order("created_at", { ascending: false })
 
-    if (error) {
-      return getFallbackOrders().map(sanitizeOrder)
-    }
-    return ((data as Order[]) ?? []).map(sanitizeOrder)
+    if (error || !data) return []
+    return (data as Order[]).map(sanitizeOrder)
   } catch {
-    return getFallbackOrders().map(sanitizeOrder)
+    return []
   }
 }

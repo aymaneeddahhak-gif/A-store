@@ -33,14 +33,12 @@ function discountOf(p: Product): number {
     : 0
 }
 
-/** Pixel-clone of the home discount card — only palette + percent vary. */
+/** Deal tier card — clicking Apply updates the seller's or admin's Supabase products. */
 function DealPopupCard({
   tier,
   liveCount,
   title,
   subtitle,
-  buttonLabel,
-  showApply,
   applyBusy,
   onApply,
   onHide,
@@ -49,8 +47,6 @@ function DealPopupCard({
   liveCount: number
   title: string
   subtitle: string
-  buttonLabel: string
-  showApply: boolean
   applyBusy: boolean
   onApply: () => void
   onHide: () => void
@@ -102,9 +98,11 @@ function DealPopupCard({
         </div>
         <button
           type="button"
-          className={`z-10 px-6 py-2.5 ${tier.btn} text-gray-50 transition-colors font-bold text-base rounded-lg`}
+          onClick={onApply}
+          disabled={applyBusy}
+          className={`z-10 px-6 py-2.5 ${tier.btn} text-gray-50 transition-colors font-bold text-base rounded-lg cursor-pointer disabled:opacity-50`}
         >
-          {buttonLabel}
+          {applyBusy ? "Applying…" : "Apply"}
         </button>
         <p className={`text-sm font-bold tracking-widest ${tier.text}`}>BIG SAVINGS</p>
       </div>
@@ -113,35 +111,32 @@ function DealPopupCard({
         <p className="text-[11px] text-gray-400">
           {liveCount > 0 ? `${liveCount} live at this tier` : "no live deals at this tier"}
         </p>
-        {showApply && (
-          <button
-            type="button"
-            onClick={onApply}
-            disabled={applyBusy}
-            className="px-4 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-bold hover:opacity-85 disabled:opacity-40 transition-opacity cursor-pointer"
-          >
-            {applyBusy ? "Applying…" : "Apply"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={applyBusy}
+          className="px-4 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-bold hover:opacity-85 disabled:opacity-40 transition-opacity cursor-pointer"
+        >
+          {applyBusy ? "Applying…" : "Apply"}
+        </button>
       </div>
     </div>
   )
 }
 
 /**
- * Offers tab — the deal-popup ladder only (exact home cards, recolored
- * 100→10) with admin Apply/Clear. Promo codes and popup-copy editing were
- * removed by design; the home popup's words come from the seeded defaults.
+ * Offers tab — deal-popup ladder (100→10) with Supabase Apply/Clear for both
+ * Sellers (scoped to their own products) and Admin (store catalog).
  */
 export function OffersDiscountView({
   isDarkMode = false,
   products,
-  isAdmin,
+  onApplied,
 }: {
   isDarkMode?: boolean
   products: Product[]
-  /** Only the store admin may apply offer tiers to their own products. */
-  isAdmin: boolean
+  isAdmin?: boolean
+  onApplied?: () => Promise<void> | void
 }) {
   const { showToast } = useToast()
   const [promoCount, setPromoCount] = useState<number | null>(null)
@@ -151,8 +146,6 @@ export function OffersDiscountView({
 
   useEffect(() => {
     void listPromosAction().then((res: Awaited<ReturnType<typeof listPromosAction>>) => {
-      // Promo codes were removed from this view; we still count active ones
-      // so the ladder's "live" numbers include them, same as before.
       if (res.ok) setPromoCount(res.data.filter((p: PromoCode) => p.active).length)
     })
     void getDealsPopupAction().then((res) => {
@@ -175,6 +168,7 @@ export function OffersDiscountView({
     try {
       const res = await applyDealsPercentAction(pct)
       if (res.ok) {
+        await onApplied?.()
         showToast(`${pct}% offer applied to your products.`, "success")
       } else {
         showToast(res.error, "error")
@@ -190,6 +184,7 @@ export function OffersDiscountView({
     try {
       const res = await clearAppliedPercentAction()
       if (res.ok) {
+        await onApplied?.()
         showToast("Offer cleared — previous prices restored.", "info")
       } else {
         showToast(res.error, "error")
@@ -206,19 +201,17 @@ export function OffersDiscountView({
         <div className="mb-6">
           <h3 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Deal Popups 100% → 10%</h3>
           <p className="text-xs text-gray-400 mt-0.5">Same card as the home discount popup, one color per tier</p>
-          {isAdmin && (
-            <div className="mt-2 flex items-center gap-3">
-              <p className="text-[11px] text-gray-400">Applying a tier sets this discount on your own products.</p>
-              <button
-                type="button"
-                onClick={() => void handleClearOffer()}
-                disabled={applying === -1}
-                className={`text-[11px] font-semibold underline disabled:opacity-40 cursor-pointer ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
-              >
-                Clear offer (restore prices)
-              </button>
-            </div>
-          )}
+          <div className="mt-2 flex items-center gap-3">
+            <p className="text-[11px] text-gray-400">Applying a tier sets this discount on your products in Supabase.</p>
+            <button
+              type="button"
+              onClick={() => void handleClearOffer()}
+              disabled={applying === -1}
+              className={`text-[11px] font-semibold underline disabled:opacity-40 cursor-pointer ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Clear offer (restore prices)
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {TIERS.filter((t) => !hidden.includes(t.pct)).map((tier) => (
@@ -228,8 +221,6 @@ export function OffersDiscountView({
               liveCount={liveAt(tier.pct)}
               title={popupCopy?.title ?? "Discount"}
               subtitle={popupCopy?.subtitle ?? "Up to"}
-              buttonLabel={popupCopy?.button_label ?? "Shop now"}
-              showApply={isAdmin}
               applyBusy={applying === tier.pct}
               onApply={() => void handleApply(tier.pct)}
               onHide={() => setHidden((prev) => [...prev, tier.pct])}

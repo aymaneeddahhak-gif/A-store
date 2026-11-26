@@ -44,6 +44,7 @@ export function CheckoutExperience() {
   const { showToast } = useToast()
   const reducedMotion = useReducedMotion()
   const router = useRouter()
+  const mascotVideoRef = useRef<HTMLVideoElement>(null)
 
   const [step, setStep] = useState<Step>("cart")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -71,6 +72,30 @@ export function CheckoutExperience() {
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const markTouched = (field: string) =>
     setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }))
+
+  useEffect(() => {
+    const video = mascotVideoRef.current
+    if (!video) return
+    if (reducedMotion) {
+      video.pause()
+      return
+    }
+    const ensurePlaying = () => {
+      if (document.hidden) return
+      video.muted = true
+      if (video.paused) void video.play().catch(() => {})
+    }
+    ensurePlaying()
+    const onVisibility = () => {
+      if (!document.hidden) ensurePlaying()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("focus", ensurePlaying)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("focus", ensurePlaying)
+    }
+  }, [reducedMotion, step, selectedItems.length])
 
   useEffect(() => {
     if (authLoading) return
@@ -330,10 +355,11 @@ export function CheckoutExperience() {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
-          {/* ================= LEFT: MASCOT (borderless white backdrop matching column height) ================= */}
+          {/* ================= LEFT: MASCOT (framed card with its own background like login) ================= */}
           <div className="w-full lg:col-span-6 flex flex-col justify-center">
-            <div className="w-full flex-1 min-h-[420px] flex items-center justify-center p-2 sm:p-4 bg-white select-none">
+            <div className="relative flex items-center justify-center w-full flex-1 min-h-[420px] rounded-[20px] overflow-hidden bg-[#fbfaf8] border border-[#ecedec] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.12)] p-4 sm:p-6 select-none pointer-events-none">
               <video
+                ref={mascotVideoRef}
                 src="/videos/mascot/checkoutcartvideotrsprnt.webm"
                 autoPlay={!reducedMotion}
                 muted
@@ -346,10 +372,10 @@ export function CheckoutExperience() {
                 onContextMenu={(e) => e.preventDefault()}
                 preload="auto"
                 aria-label="Store mascot with shopping cart"
-                className="w-full h-full max-h-[580px] object-contain pointer-events-none select-none"
+                className="w-full h-auto max-h-[580px] object-contain pointer-events-none select-none block"
               />
             </div>
-            <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-widest text-neutral-400">
+            <p className="mt-3 text-center text-[11px] font-bold uppercase tracking-widest text-neutral-400">
               Secure checkout
             </p>
           </div>
