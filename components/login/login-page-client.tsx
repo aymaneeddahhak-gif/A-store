@@ -45,6 +45,12 @@ export function LoginPageClient() {
               onGoogleLogin={flow.handleGoogleLogin}
               onForgotPassword={flow.handleForgotPassword}
               onDemoLogin={flow.handleDemoLogin}
+              pendingDemoRole={flow.pendingDemoRole}
+              demoVisitorName={flow.demoVisitorName}
+              demoNameError={flow.demoNameError}
+              onDemoVisitorNameChange={flow.setDemoVisitorName}
+              onConfirmClientDemo={flow.confirmClientDemoLogin}
+              onCancelClientDemo={flow.cancelClientDemoLogin}
               onSwitchMode={flow.switchMode}
             />
           )}

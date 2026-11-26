@@ -29,6 +29,12 @@ type AuthFormProps = {
   onGoogleLogin: () => void
   onForgotPassword: () => void
   onDemoLogin: (accountId: DemoAccountId) => void
+  pendingDemoRole: DemoAccountId | null
+  demoVisitorName: string
+  demoNameError?: string
+  onDemoVisitorNameChange: (value: string) => void
+  onConfirmClientDemo: () => void
+  onCancelClientDemo: () => void
   onSwitchMode: (mode: AuthMode) => void
 }
 
@@ -50,6 +56,12 @@ export function AuthForm({
   onGoogleLogin,
   onForgotPassword,
   onDemoLogin,
+  pendingDemoRole,
+  demoVisitorName,
+  demoNameError,
+  onDemoVisitorNameChange,
+  onConfirmClientDemo,
+  onCancelClientDemo,
   onSwitchMode,
 }: AuthFormProps) {
   const [rememberMe, setRememberMe] = useState(true)
@@ -67,6 +79,67 @@ export function AuthForm({
           />
         ))}
       </div>
+
+      {pendingDemoRole === "customer" && (
+        <div className="rounded-[12px] border border-[#ededef] dark:border-white/10 bg-[#f8f8f9] dark:bg-white/[0.03] p-3 space-y-2">
+          <div className="uiverse-login-field-label">
+            <label htmlFor="demo-visitor-name">Your Name (Optional)</label>
+          </div>
+          <div className="uiverse-login-input-wrap bg-white dark:bg-[#1c1f26]">
+            <User
+              size={18}
+              className="shrink-0 text-[#151717] dark:text-neutral-300"
+              aria-hidden
+            />
+            <input
+              id="demo-visitor-name"
+              type="text"
+              maxLength={60}
+              autoFocus
+              value={demoVisitorName}
+              onChange={(e) => onDemoVisitorNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  onConfirmClientDemo()
+                }
+              }}
+              className="uiverse-login-input"
+              placeholder="e.g. Sara (or leave blank)"
+              autoComplete="name"
+            />
+          </div>
+          {demoNameError ? (
+            <p className="text-[11px] font-medium text-red-500">{demoNameError}</p>
+          ) : (
+            <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+              Leave empty to sign in with an exact-time name like{" "}
+              <span className="font-mono font-semibold text-[var(--foreground)]">
+                Visit-(YYYY-MM-DD HH:MM:SS)
+              </span>{" "}
+              (or keep your saved name if returning).
+            </p>
+          )}
+          <div className="flex items-center gap-2 pt-0.5">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={onConfirmClientDemo}
+              className="uiverse-login-submit flex-1 !mt-0 !mb-0 !h-[42px] text-[13px]"
+            >
+              {isLoading ? <Loader2 size={16} className="animate-spin" /> : "Continue as Client"}
+            </button>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={onCancelClientDemo}
+              className="px-3 h-[42px] rounded-[10px] border border-[#ededef] dark:border-white/10 text-xs font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <p className="uiverse-login-text">Or Sign In With Email</p>
 

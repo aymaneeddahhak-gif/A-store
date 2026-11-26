@@ -48,6 +48,9 @@ export function useAuthFlow() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
+  const [pendingDemoRole, setPendingDemoRole] = useState<DemoAccountId | null>(null)
+  const [demoVisitorName, setDemoVisitorName] = useState("")
+  const [demoNameError, setDemoNameError] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (!authLoading && user && !redirectingRef.current) {
@@ -283,12 +286,13 @@ export function useAuthFlow() {
     }
   }, [email])
 
-  const handleDemoLogin = useCallback(
-    async (accountId: DemoAccountId) => {
+  const executeDemoLogin = useCallback(
+    async (accountId: DemoAccountId, customName?: string) => {
       const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)
       if (!account) return
       setFeedback(null)
       setFieldErrors({})
+      setDemoNameError(undefined)
       setIsLoading(true)
       const queryNext = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null
       const defaultTarget = accountId === "customer" ? "/profile" : "/seller"
@@ -306,9 +310,10 @@ export function useAuthFlow() {
         }))
       }
       try {
-        const res = await demoSessionLoginAction(accountId)
+        const res = await demoSessionLoginAction(accountId, customName)
         if (res.ok && res.user) {
           redirectingRef.current = true
+          setPendingDemoRole(null)
           signInDemo(res.user)
           router.push(target)
           router.refresh()
@@ -329,6 +334,39 @@ export function useAuthFlow() {
     },
     [router, signInDemo]
   )
+
+  const handleDemoLogin = useCallback(
+    async (accountId: DemoAccountId) => {
+      if (accountId === "customer") {
+        setFeedback(null)
+        setFieldErrors({})
+        setDemoNameError(undefined)
+        setPendingDemoRole("customer")
+        return
+      }
+      setPendingDemoRole(null)
+      await executeDemoLogin(accountId)
+    },
+    [executeDemoLogin]
+  )
+
+  const confirmClientDemoLogin = useCallback(async () => {
+    const clean = demoVisitorName.trim()
+    if (clean && clean.length < 2) {
+      setDemoNameError("Enter at least 2 characters, or leave empty.")
+      return
+    }
+    if (clean.length > 60) {
+      setDemoNameError("Name must be 60 characters or fewer.")
+      return
+    }
+    await executeDemoLogin("customer", clean || undefined)
+  }, [demoVisitorName, executeDemoLogin])
+
+  const cancelClientDemoLogin = useCallback(() => {
+    setPendingDemoRole(null)
+    setDemoNameError(undefined)
+  }, [])
 
   return {
     mode,
@@ -356,10 +394,19 @@ export function useAuthFlow() {
     signupSuccess,
     authLoading,
     user,
+    pendingDemoRole,
+    demoVisitorName,
+    setDemoVisitorName: (v: string) => {
+      setDemoVisitorName(v)
+      if (demoNameError) setDemoNameError(undefined)
+    },
+    demoNameError,
     switchMode,
     handleSubmit,
     handleGoogleLogin,
     handleForgotPassword,
     handleDemoLogin,
+    confirmClientDemoLogin,
+    cancelClientDemoLogin,
   }
 }

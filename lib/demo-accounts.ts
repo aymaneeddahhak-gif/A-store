@@ -27,3 +27,15 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "customer@a-store.shop",
   },
 ]
+
+/** Exact-timestamp default visitor name, e.g. `Visit-(2026-11-26 21:45:12)`. */
+export function formatVisitTimestampName(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const yyyy = date.getUTCFullYear()
+  const mm = pad(date.getUTCMonth() + 1)
+  const dd = pad(date.getUTCDate())
+  const hh = pad(date.getUTCHours())
+  const min = pad(date.getUTCMinutes())
+  const ss = pad(date.getUTCSeconds())
+  return `Visit-(${yyyy}-${mm}-${dd} ${hh}:${min}:${ss})`
+}

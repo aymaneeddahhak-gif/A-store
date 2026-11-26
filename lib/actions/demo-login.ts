@@ -9,7 +9,7 @@ import {
   verifyDemoCookiePayload,
 } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
-import { DEMO_ACCOUNTS, type DemoAccountId } from "@/lib/demo-accounts"
+import { DEMO_ACCOUNTS, formatVisitTimestampName, type DemoAccountId } from "@/lib/demo-accounts"
 import { ensureVisitorDemoUser, isUuid } from "@/lib/demo-seller-server"
 
 const VISITOR_SELLER_UID_COOKIE = "astore_visitor_seller_uid"
@@ -27,7 +27,10 @@ async function setSignedDemoCookie(payload: { id: string; email: string; full_na
   })
 }
 
-export async function demoSessionLoginAction(accountId: DemoAccountId): Promise<{
+export async function demoSessionLoginAction(
+  accountId: DemoAccountId,
+  customName?: string
+): Promise<{
   ok: boolean
   user?: {
     id: string
@@ -40,6 +43,14 @@ export async function demoSessionLoginAction(accountId: DemoAccountId): Promise<
   const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)
   if (!account) return { ok: false, error: "Unknown account." }
 
+  const cleanCustom = typeof customName === "string" ? customName.trim() : ""
+  if (cleanCustom && cleanCustom.length < 2) {
+    return { ok: false, error: "Name must be at least 2 characters, or leave it empty." }
+  }
+  if (cleanCustom.length > 60) {
+    return { ok: false, error: "Name must be 60 characters or fewer." }
+  }
+
   const cookieStore = await cookies()
   const visitorCookieName =
     accountId === "demo_seller" ? VISITOR_SELLER_UID_COOKIE : VISITOR_CLIENT_UID_COOKIE
@@ -47,7 +58,8 @@ export async function demoSessionLoginAction(accountId: DemoAccountId): Promise<
 
   const res = await ensureVisitorDemoUser({
     role: accountId,
-    fullName: accountId === "demo_seller" ? "Seller" : "Alex Customer",
+    fullName: accountId === "demo_seller" ? "Seller" : formatVisitTimestampName(),
+    customName: cleanCustom || undefined,
     existingUserId: existingUid,
   })
   if (!res.ok) return { ok: false, error: res.error }

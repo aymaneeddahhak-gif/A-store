@@ -111,7 +111,8 @@ export function CheckoutExperience() {
     const meta = (user.user_metadata ?? {}) as Record<string, unknown>
     const saved = (meta.address ?? {}) as Record<string, string>
     const fullName = typeof meta.full_name === "string" ? meta.full_name : ""
-    const [first = "", ...rest] = fullName.split(" ")
+    const isAutoVisitName = fullName.startsWith("Visit-(")
+    const [first = "", ...rest] = isAutoVisitName ? [] : fullName.split(" ")
     setFormData((prev) => ({
       ...prev,
       firstName: prev.firstName || saved.firstName || first,

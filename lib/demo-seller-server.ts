@@ -117,6 +117,7 @@ async function cleanupExpiredVisitorUsers(): Promise<void> {
 export async function ensureVisitorDemoUser(input: {
   role: "demo_seller" | "customer"
   fullName: string
+  customName?: string
   existingUserId?: string | null
 }): Promise<
   | {
@@ -136,6 +137,8 @@ export async function ensureVisitorDemoUser(input: {
   }
 
   const prefix = input.role === "demo_seller" ? "demo-seller-" : "demo-client-"
+  const cleanCustomName = typeof input.customName === "string" ? input.customName.trim().slice(0, 60) : ""
+  const initialName = cleanCustomName || input.fullName
 
   try {
     if (input.existingUserId && isUuid(input.existingUserId)) {
@@ -145,10 +148,28 @@ export async function ensureVisitorDemoUser(input: {
       const email = (existing?.user?.email ?? "").toLowerCase()
       if (!readErr && existing?.user && email.startsWith(prefix) && email.endsWith(DEMO_EMAIL_DOMAIN)) {
         const meta = (existing.user.user_metadata ?? {}) as Record<string, unknown>
-        const resolvedName =
+        const existingName =
           typeof meta.full_name === "string" && meta.full_name.trim()
             ? meta.full_name.trim()
-            : input.fullName
+            : ""
+
+        if (cleanCustomName && cleanCustomName !== existingName) {
+          const nextMeta = { ...meta, full_name: cleanCustomName }
+          const { data: updated } = await admin.auth.admin.updateUserById(existing.user.id, {
+            user_metadata: nextMeta,
+          })
+          return {
+            ok: true,
+            user: {
+              id: existing.user.id,
+              email,
+              fullName: cleanCustomName,
+              metadata: (updated?.user?.user_metadata ?? nextMeta) as Record<string, unknown>,
+            },
+          }
+        }
+
+        const resolvedName = existingName || initialName
         return {
           ok: true,
           user: {
@@ -169,7 +190,7 @@ export async function ensureVisitorDemoUser(input: {
       user_metadata: {
         role: input.role,
         demo_visitor: true,
-        full_name: input.fullName,
+        full_name: initialName,
       },
     })
     if (createErr || !created?.user?.id) {
@@ -187,7 +208,7 @@ export async function ensureVisitorDemoUser(input: {
       user: {
         id: created.user.id,
         email: internalEmail,
-        fullName: input.fullName,
+        fullName: initialName,
         metadata: (created.user.user_metadata ?? {}) as Record<string, unknown>,
       },
     }
